@@ -1,0 +1,263 @@
+<script setup lang="ts">
+import { onMounted, onUnmounted, ref, computed } from 'vue';
+import {
+  store,
+  initData,
+  loadPlrFile,
+  createNewPlayer,
+  deselectSlot,
+  cancelMoveMode
+} from '@/store';
+import TopBar from '@/components/TopBar.vue';
+import TabNav from '@/components/TabNav.vue';
+import InventoryView from '@/components/InventoryView.vue';
+import EquipmentView from '@/components/EquipmentView.vue';
+import CharacterView from '@/components/CharacterView.vue';
+import BuffView from '@/components/BuffView.vue';
+import ResearchView from '@/components/ResearchView.vue';
+import AboutView from '@/components/AboutView.vue';
+import SlotEditorPanel from '@/components/SlotEditorPanel.vue';
+import BackupNoticeModal from '@/components/BackupNoticeModal.vue';
+import ErrorModal from '@/components/ErrorModal.vue';
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+} from '@/components/ui/drawer';
+import { Button } from '@/components/ui/button';
+import { getItemSpriteStyle } from '@/utils/sprite';
+
+const fileInputRef = ref<HTMLInputElement | null>(null);
+const isMobile = ref(false);
+
+function checkMobile() {
+  isMobile.value = window.innerWidth < 768;
+}
+
+onMounted(() => {
+  initData();
+  checkMobile();
+  window.addEventListener('resize', checkMobile);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('resize', checkMobile);
+});
+
+const isMobileDrawerOpen = computed({
+  get: () => isMobile.value && store.selectedSlot !== null && !store.isMoveMode,
+  set: (val: boolean) => {
+    if (!val && isMobile.value) {
+      deselectSlot();
+    }
+  },
+});
+
+function triggerUpload() {
+  fileInputRef.value?.click();
+}
+
+function onFileSelected(e: Event) {
+  const target = e.target as HTMLInputElement;
+  if (target.files && target.files.length > 0) {
+    loadPlrFile(target.files[0]);
+    target.value = '';
+  }
+}
+</script>
+
+<template>
+  <div class="min-h-screen text-[#4A3F3D] flex flex-col font-sans select-none" style="background-color: var(--radix-sakura-canvas);">
+    <!-- 顶部全局导航栏 -->
+    <TopBar />
+
+    <!-- 角色已载入时的功能界面 -->
+    <template v-if="store.player">
+      <!-- 移动待命提示横条 (手机端抽屉收起后常驻顶部，视野 100% 毫无遮挡) -->
+      <transition name="fade">
+        <div
+          v-if="store.isMoveMode"
+          class="sticky top-12 z-30 bg-[#F9D6DB] border-b border-[#E598A3] px-4 py-2 flex items-center justify-between shadow-xs"
+        >
+          <div class="flex items-center gap-2 text-xs font-bold text-[#4A3F3D]">
+            <span :style="{ ...getItemSpriteStyle(84, 16), imageRendering: 'pixelated' }"></span>
+            <span>已选定物品，点击目标格子完成互换</span>
+          </div>
+          <Button
+            variant="ghost"
+            size="xs"
+            class="h-6 text-xs text-[#4A3F3D] hover:bg-white/60 px-2 font-semibold"
+            @click="cancelMoveMode"
+          >
+            取消移动
+          </Button>
+        </div>
+      </transition>
+
+      <!-- 页面主体容器 (桌面端居中 max-w-6xl) -->
+      <div class="max-w-6xl w-full mx-auto p-3 md:p-6 flex-1 flex flex-col">
+        <!-- 桌面端与移动端双栏响应式网格 -->
+        <div class="flex flex-col md:flex-row md:items-start gap-4 lg:gap-6 flex-1">
+          <!-- 左侧主要展示区 (~65% 宽) -->
+          <div class="flex-1 min-w-0 flex flex-col gap-3">
+            <!-- 视图 Tab 切换 -->
+            <TabNav />
+
+            <!-- 选中的视图内容 -->
+            <main class="flex-1">
+              <InventoryView v-if="store.activeTab === 'inventory'" />
+              <EquipmentView v-else-if="store.activeTab === 'equipment'" />
+              <CharacterView v-else-if="store.activeTab === 'character'" />
+              <BuffView v-else-if="store.activeTab === 'buff'" />
+              <ResearchView v-else-if="store.activeTab === 'research'" />
+              <AboutView v-else-if="store.activeTab === 'about'" />
+            </main>
+          </div>
+
+          <!-- 桌面端右侧常驻粘性面板 (~35% 宽，sticky top-20，仅在 md: 及以上显示) -->
+          <aside class="hidden md:block w-80 lg:w-96 shrink-0 sticky top-20 self-start max-h-[calc(100vh-6rem)]">
+            <SlotEditorPanel />
+          </aside>
+        </div>
+      </div>
+
+      <!-- 移动端底部抽屉 (仅在 md: 以下屏幕且选中格子且不在移动模式时呼出) -->
+      <Drawer v-model:open="isMobileDrawerOpen">
+        <DrawerContent class="p-4 pt-1 max-h-[85vh] bg-white border-[#EADFD9]">
+          <DrawerHeader class="p-0 pb-1.5 sr-only">
+            <DrawerTitle>物品属性调整与检索</DrawerTitle>
+          </DrawerHeader>
+          <div class="overflow-y-auto max-h-[calc(85vh-2.5rem)] pb-4">
+            <SlotEditorPanel :is-drawer="true" @close="deselectSlot" />
+          </div>
+        </DrawerContent>
+      </Drawer>
+    </template>
+
+    <!-- 角色未载入时的迎宾引导界面 -->
+    <div v-else class="flex-1 flex items-center justify-center p-4">
+      <div class="max-w-md w-full bg-white rounded-2xl border border-[#EADFD9] shadow-sm p-6 text-center flex flex-col gap-4">
+        <div class="w-12 h-12 mx-auto flex items-center justify-center">
+          <img src="/logo.png" alt="Logo" class="w-12 h-12 object-contain drop-shadow-xs" />
+        </div>
+        <div>
+          <h2 class="text-base font-bold text-[#4A3F3D]">TerraFlora</h2>
+        </div>
+
+        <input
+          ref="fileInputRef"
+          type="file"
+          accept=".plr, application/octet-stream, application/*"
+          class="hidden"
+          @change="onFileSelected"
+        />
+
+        <div
+          class="border-2 border-dashed border-[#739CBF]/60 bg-[#FFF7F2] hover:bg-[#F9D6DB]/40 rounded-xl p-6 flex flex-col items-center gap-2 cursor-pointer transition-colors"
+          @click="triggerUpload"
+        >
+          <div :style="{ ...getItemSpriteStyle(48, 32), imageRendering: 'pixelated' }"></div>
+          <span class="text-xs font-bold text-[#739CBF]">点击或拖入 .plr 存档</span>
+          <span class="text-xs text-[#8E807C]">支持官方国际服与心动版</span>
+        </div>
+
+        <div class="flex items-center gap-2 my-0.5">
+          <div class="h-px bg-[#EADFD9] flex-1"></div>
+          <span class="text-[11px] text-[#8E807C]">或</span>
+          <div class="h-px bg-[#EADFD9] flex-1"></div>
+        </div>
+
+        <Button
+          variant="secondary"
+          class="w-full h-9 text-xs font-bold bg-[#F9D6DB]/70 hover:bg-[#F9D6DB] text-[#4A3F3D] border border-[#EADFD9] flex items-center justify-center gap-2 shadow-2xs"
+          @click="createNewPlayer('Player', 'relogic')"
+        >
+          <span :style="{ ...getItemSpriteStyle(3507, 16), imageRendering: 'pixelated' }"></span>
+          <span>从零创建新角色</span>
+        </Button>
+
+        <div class="bg-[#F9D6DB]/35 border border-[#E598A3]/60 rounded-lg p-3 text-left text-xs text-[#4A3F3D] leading-relaxed">
+          如果你是在浏览器中使用本工具，且为 <strong>Android 11</strong> 及以上版本，请先将存档移动到浏览器可访问的目录（例如：<code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] font-mono text-[11px]">Download</code> 文件夹）。如果你找不到存档位置，可以访问：<a href="./guide/index.html" target="_blank" rel="noopener noreferrer" class="font-bold text-[#739CBF] hover:underline">存档寻找向导</a>。
+        </div>
+
+        <div class="bg-[#FFF7F2] border border-[#EADFD9] rounded-lg p-3 text-left text-xs text-[#8E807C] flex flex-col gap-1">
+          <div class="font-bold text-[#4A3F3D] flex items-center gap-1.5">
+            <span :style="{ ...getItemSpriteStyle(149, 14), imageRendering: 'pixelated' }"></span>
+            <span>系统默认存档路径：</span>
+          </div>
+          <p>• <strong>Windows：</strong>文档 \ My Games \ Terraria \ Players</p>
+          <p>• <strong>Android：</strong>Android/data/com.and.games505.TerrariaPaid/Players</p>
+          <p>• <strong>iOS / iPad：</strong>文件 App \ 我的 iPhone/iPad \ Terraria \ Players</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 浮动拖拽幽灵元素 (触屏上悬浮在手指上方避免遮挡视野，鼠标居中) -->
+    <div
+      v-if="store.dragState.isDragging && store.dragState.item"
+      :class="[
+        'fixed pointer-events-none z-50 flex items-center justify-center rounded-xl bg-white/95 border-2 border-[#739CBF] shadow-2xl transition-transform duration-75',
+        store.dragState.isTouch
+          ? '-translate-x-1/2 -translate-y-[135%] w-14 h-14 scale-110'
+          : '-translate-x-1/2 -translate-y-1/2 w-12 h-12 scale-105'
+      ]"
+      :style="{ left: `${store.dragState.x}px`, top: `${store.dragState.y}px` }"
+    >
+      <div
+        :style="{
+          ...getItemSpriteStyle(store.dragState.item.id, store.dragState.isTouch ? 40 : 36),
+          imageRendering: 'pixelated',
+        }"
+        class="drop-shadow-sm"
+      ></div>
+      <span
+        v-if="store.dragState.item.stack > 1"
+        class="absolute bottom-1 right-1 text-[11px] font-black text-[#4A3F3D] leading-none drop-shadow-[0_1px_1px_rgba(255,255,255,0.95)]"
+      >
+        {{ store.dragState.item.stack }}
+      </span>
+    </div>
+
+    <!-- 全局 Toast 提示 -->
+    <transition name="toast-fade">
+      <div
+        v-if="store.toastMessage"
+        class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-[#4A3F3D]/95 text-white text-xs font-semibold px-4 py-2 rounded-full shadow-lg z-50 backdrop-blur-xs pointer-events-none"
+      >
+        {{ store.toastMessage }}
+      </div>
+    </transition>
+
+    <!-- 加载遮罩 -->
+    <div
+      v-if="store.isLoading"
+      class="fixed inset-0 bg-white/70 backdrop-blur-xs z-50 flex flex-col items-center justify-center gap-3 text-xs font-semibold text-[#4A3F3D]"
+    >
+      <div class="w-8 h-8 border-3 border-[#EADFD9] border-t-[#739CBF] rounded-full animate-spin"></div>
+      <span>正在处理存档...</span>
+    </div>
+
+    <!-- 首次访问/手动调起的备份与安全须知弹窗 -->
+    <BackupNoticeModal />
+    <ErrorModal />
+  </div>
+</template>
+
+<style>
+.toast-fade-enter-active,
+.toast-fade-leave-active,
+.fade-enter-active,
+.fade-leave-active {
+  transition: all 0.2s ease;
+}
+.toast-fade-enter-from,
+.toast-fade-leave-to {
+  opacity: 0;
+  transform: translate(-50%, 10px);
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>

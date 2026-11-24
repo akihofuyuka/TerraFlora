@@ -1,0 +1,47 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Local raw assets & data caches
+raw/
+dump/
+tools/gamedump/bin/
+tools/gamedump/obj/
+raw_data/
+scripts/*-raw.json
+
+# Local documentation & notes (unpushed)
+DESIGN.md
+AVATAR_RENDER.md
+
+# Dev test pages & temp saves (never committed, never deployed)
+dev/
+src/dev/
+*.plr
+*.bak
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

@@ -1,0 +1,56 @@
+{
+  "3847": {
+    "key": "OgreMask",
+    "name": "食人魔面具",
+    "en": "ItemName.OgreMask",
+    "cat": "armor"
+  },
+  "3848": {
+    "key": "GoblinMask",
+    "name": "哥布林面具",
+    "en": "ItemName.GoblinMask",
+    "cat": "armor"
+  },
+  "3849": {
+    "key": "GoblinBomberCap",
+    "name": "哥布林炸弹帽",
+    "en": "ItemName.GoblinBomberCap",
+    "cat": "armor"
+  },
+  "3850": {
+    "key": "EtherianJavelin",
+    "name": "埃特尼亚标枪",
+    "en": "ItemName.EtherianJavelin",
+    "cat": "weapon"
+  },
+  "3851": {
+    "key": "KoboldDynamiteBackpack",
+    "name": "小妖魔雷管背包",
+    "en": "ItemName.KoboldDynamiteBackpack",
+    "cat": "accessory"
+  },
+  "3861": {
+    "key": "BossBagOgre",
+    "name": "食人魔宝藏袋",
+    "en": "ItemName.BossBagOgre",
+    "cat": "consumable"
+  },
+  "3862": {
+    "key": "BossBagDarkMage",
+    "name": "黑暗魔法师宝藏袋",
+    "en": "ItemName.BossBagDarkMage",
+    "cat": "consumable"
+  },
+  "3978": {
+    "key": "ColorOnlyDye",
+    "name": "仅颜色染料",
+    "en": "ItemName.ColorOnlyDye",
+    "cat": "consumable"
+  },
+  "4722": {
+    "key": "FirstFractal",
+    "name": "第一分形",
+    "en": "ItemName.FirstFractal",
+    "cat": "weapon"
+  }
+}

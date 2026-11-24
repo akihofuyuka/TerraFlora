@@ -1,0 +1,89 @@
+/*! @license AGPL-3.0 | Author: akihofuyuka */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --radix-sakura-canvas: #FFF7F2;
+    --radix-petal-border: #EADFD9;
+    --radix-mist-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --akihofuyuka-badge-tone: #e598a3;
+
+    --background: 24 100% 98%; /* #FFF7F2 */
+    --foreground: 8 10% 26%;   /* #4A3F3D */
+
+    --card: 0 0% 100%;
+    --card-foreground: 8 10% 26%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 8 10% 26%;
+
+    --primary: 207 38% 60%;    /* #739CBF */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 350 78% 91%;  /* #F9D6DB */
+    --secondary-foreground: 8 10% 26%;
+
+    --muted: 24 23% 91%;       /* #EFE7E2 */
+    --muted-foreground: 12 7% 52%; /* #8E807C */
+
+    --accent: 350 78% 91%;
+    --accent-foreground: 8 10% 26%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 20 25% 89%;      /* #EADFD9 */
+    --input: 20 25% 89%;
+    --ring: 207 38% 60%;
+
+    --radius: 0.625rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    background-color: var(--radix-sakura-canvas);
+    color: #4A3F3D;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    overflow-x: hidden;
+  }
+}
+
+[data-slot="radix-petal-frame"] {
+  border-color: var(--radix-petal-border);
+  box-shadow: var(--radix-mist-shadow);
+}
+
+.author-badge {
+  background-color: var(--akihofuyuka-badge-tone);
+}
+
+/* 物品图标像素渲染 */
+.pixelated {
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: crisp-edges;
+}
+
+/* 优雅紧凑滚动条 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #EADFD9;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #739CBF;
+}

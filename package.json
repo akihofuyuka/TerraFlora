@@ -1,0 +1,36 @@
+{
+  "name": "terraflora",
+  "private": true,
+  "version": "1.0.2",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "test": "vitest run",
+    "preview": "vite preview",
+    "extract:build": "node scripts/extract/build-from-dump.mjs",
+    "extract:dump": "echo \"用法: dotnet run --project tools/gamedump -- textures <游戏安装路径> dump\""
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.11",
+    "pinyin-pro": "^3.29.5",
+    "pngjs": "^7.0.0",
+    "typescript": "~7.0.2",
+    "vite": "^8.3.6",
+    "vite-plugin-pwa": "^2.0.0",
+    "vitest": "^5.1.1"
+  },
+  "dependencies": {
+    "autoprefixer": "^10.7.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-vue-next": "^0.577.0",
+    "postcss": "^8.5.33",
+    "radix-vue": "^1.9.17",
+    "tailwind-merge": "^3.7.1",
+    "tailwindcss": "^3.4.19",
+    "tailwindcss-animate": "^1.0.7",
+    "vaul-vue": "^0.4.1",
+    "vue": "^3.5.46"
+  }
+}
