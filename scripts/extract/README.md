@@ -66,8 +66,8 @@ npx tsx scripts/process-pinyin.ts
 ```
 压缩生成前端轻量化的 `public/data/items.min.json` 与 `prefixes.min.json`。
 
-### 步骤四：更新前端缓存号
-在 `src/utils/avatar.ts` 与 `src/utils/sprite.ts` 中同步递增 `ASSET_VERSION` / `ATLAS_VERSION`，确保客户端浏览器及 Service Worker 及时获取最新资产。
+### 步骤四：递增版本号
+运行 `npm version patch --no-git-tag-version` 更新 `package.json` 版本号；打包时会自动同步至页面显示版本与静态图集/数据的 `?v=` 缓存参数，确保浏览器与 Service Worker 及时拉取最新资产。
 
 ---
 

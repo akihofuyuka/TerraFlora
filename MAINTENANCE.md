@@ -44,20 +44,19 @@ src/
 ## 3. 角色图层绘制顺序 (`src/utils/avatar.ts`)
 
 从底到顶绘制顺序：
-1. Layer 01: 尾巴 / 背部饰品
+1. Layer 08~10: 背包 / 尾巴 / 站立翅膀与斗篷 / 背部饰品 / 双层头饰背片 / 气球
 2. Layer 12: 躯干下层、后臂与后肩
-3. Layer 13: 护腿 / 裤装
-4. Layer 14: 鞋履饰品
-5. Layer 17: 躯干护甲 / 衣服
-6. Layer 18: 副手拿持饰品
-7. Layer 19: 腰部饰品
-8. Layer 20: 颈部饰品
-9. Layer 21: 头部（皮肤、瞳孔、发型/压帽发型、头盔）
-10. Layer 22: 面部饰品
-11. Layer 25: 盾牌
-12. Layer 28: 前肩甲与前臂
-13. Layer 29: 主手佩戴饰品
-14. Layer 32: 胸挂饰品
+3. Layer 13 ↔ Layer 14: 护腿 / 裤装与鞋履饰品（穿戴连体裙袍且非和服时鞋履位于护腿下方）
+4. Layer 17: 躯干护甲 / 衣服
+5. Layer 18: 副手拿持饰品
+6. Layer 19: 腰部饰品
+7. Layer 20: 颈部饰品
+8. Layer 21: 头部（皮肤、瞳孔、发型/压帽发型、头盔）
+9. Layer 22: 面部饰品与天使光环
+10. Layer 25: 盾牌
+11. Layer 28: 前肩甲与前臂
+12. Layer 29: 主手佩戴饰品
+13. Layer 32: 胸挂 / 披风前片饰品
 
 ---
 
@@ -105,9 +104,8 @@ node scripts/extract/build-from-dump.mjs --dump dump
 # 3. 生成拼音索引
 npx tsx scripts/process-pinyin.ts
 
-# 4. 递增缓存版本号
-# 修改 src/utils/sprite.ts 中的 ATLAS_VERSION
-# 修改 src/utils/avatar.ts 中的 ASSET_VERSION
+# 4. 递增应用与图集缓存版本号（自动同步关于页面与 ?v= 缓存参数）
+npm version patch --no-git-tag-version
 ```
 
 ---

@@ -1,5 +1,5 @@
 import type { PlayerData, ColorData } from '@/core/plr';
-import { getLoadoutArmor, getLoadoutDye } from '@/store';
+import { ATLAS_VERSION } from './sprite';
 
 export interface ArmorDataFile {
   items: Record<string, { head?: number; body?: number; leg?: number }>;
@@ -76,6 +76,8 @@ export interface SettledSlots {
   wings: number;
   shoe: number;
   back: number;
+  backpack: number;
+  tail: number;
   front: number;
   waist: number;
   neck: number;
@@ -94,11 +96,14 @@ export interface SettledDyes {
   cWings: [number, number, number] | null;
   cShoe: [number, number, number] | null;
   cBack: [number, number, number] | null;
+  cBackpack: [number, number, number] | null;
+  cTail: [number, number, number] | null;
   cFront: [number, number, number] | null;
   cWaist: [number, number, number] | null;
   cNeck: [number, number, number] | null;
   cFace: [number, number, number] | null;
   cFaceFlower: [number, number, number] | null;
+  cAngelHalo: [number, number, number] | null;
   cHandOn: [number, number, number] | null;
   cHandOff: [number, number, number] | null;
   cShield: [number, number, number] | null;
@@ -128,6 +133,7 @@ export interface PlayerDrawSet {
   hidesTopSkin: boolean;
   hidesBottomSkin: boolean;
   wearsRobe: boolean;
+  angelHalo: boolean;
   missingHand: boolean;
   missingArm: boolean;
 
@@ -153,6 +159,7 @@ export interface DrawCommand {
   origin?: DrawPoint;
   tintColor?: ColorData;
   dyeColor?: [number, number, number] | null;
+  alpha?: number;
 }
 
 export interface RenderOptions {
@@ -194,9 +201,7 @@ function getBasePrefix(): string {
   return base.endsWith('/') ? base : `${base}/`;
 }
 
-// Asset cache-busting version for sprite atlases and JSON data
-const ASSET_VERSION = '7';
-const assetUrl = (p: string) => `${getBasePrefix()}${p}?v=${ASSET_VERSION}`;
+const assetUrl = (p: string) => `${getBasePrefix()}${p}?v=${ATLAS_VERSION}`;
 
 function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -365,6 +370,84 @@ function drawDyedPart(
   targetCtx.drawImage(canvas, dx, dy);
 }
 
+type RobeBodyMatch = number | ((isMale: boolean) => number);
+
+// Mirrors Terraria Player.SetMatch (ArmorSlotRequested = 1): full-body robes/dresses override the leg frame and dye.
+const ROBE_BODY_TO_LEG: Record<number, RobeBodyMatch> = {
+  15: 88,
+  36: 89,
+  41: 97,
+  42: 90,
+  58: 91,
+  59: 92,
+  60: 93,
+  61: 94,
+  62: 95,
+  63: 96,
+  77: 121,
+  88: 168,
+  90: 166,
+  93: 165,
+  165: (m) => (m ? 118 : 99),
+  166: (m) => (m ? 119 : 100), // Kimono sets wearsRobe = false in Player.SetMatch
+  167: (m) => (m ? 101 : 102),
+  180: 115,
+  181: 116,
+  183: (m) => (m ? 136 : 123),
+  191: 131,
+  213: 187,
+  215: 189,
+  219: 196,
+  221: 199,
+  223: 204,
+  231: 214,
+  232: 215,
+  233: 216,
+  241: 229,
+  256: 244,
+};
+
+// Mirrors Terraria Player.SetMatch (ArmorSlotRequested = 2): gender-specific leg sprite swaps.
+const LEG_GENDER_MATCH: Record<number, (isMale: boolean) => number | null> = {
+  57: (m) => (m ? 137 : null),
+  83: (m) => (m ? 117 : null),
+  84: (m) => (m ? 120 : null),
+  132: (m) => (m ? 135 : null),
+  146: (m) => (m ? 146 : 147),
+  154: (m) => (m ? 155 : 154),
+  158: (m) => (m ? 157 : null),
+  180: (m) => (m ? null : 179),
+  184: (m) => (m ? null : 183),
+  191: (m) => (m ? null : 192),
+  193: (m) => (m ? null : 194),
+  197: (m) => (m ? null : 198),
+  203: (m) => (m ? null : 202),
+  208: (m) => (m ? null : 207),
+  219: (m) => (m ? null : 220),
+  232: (m) => (m ? null : 233),
+  236: (m) => (m ? null : 248),
+  249: (m) => (m ? null : 250),
+};
+
+const HIDES_TOP_SKIN_BODIES = new Set([21, 22, 82, 83, 93]);
+const HIDES_BOTTOM_SKIN_LEGS = new Set([20, 21, 214, 215, 216]);
+const PANTS_OVERRIDE_LEGS = new Set([55, 63, 67, 106, 138, 140, 143, 217, 222, 226, 228]);
+
+// Mirrors Terraria ArmorIDs.Back.Sets & Player.PlayerFrame IncludedCape tables
+const BACKPACK_LAYER_IDS = new Set([7, 8, 9, 10, 15, 16, 32, 33]);
+const TAIL_LAYER_IDS = new Set([18, 19, 21, 25, 26, 27, 28]);
+const CAPE_BACK_IDS = new Set([1, 2, 3, 4, 5, 6, 14, 24, 34, 36, 39, 41]);
+const INCLUDED_CAPE_BACK: Record<number, number> = {
+  24: 29, 80: 21, 94: 19, 96: 18, 185: 17, 205: 11, 206: 12, 207: 13, 217: 22, 238: 32,
+};
+const INCLUDED_CAPE_BACK_FEMALE: Record<number, number> = { 217: 23 };
+const INCLUDED_CAPE_FRONT: Record<number, number> = { 184: 6, 248: 13 };
+const INCLUDE_CAPE_FRONT_AND_BACK: Record<number, { back: number; front: number }> = {
+  85: { back: 20, front: 7 },
+  235: { back: 30, front: 9 },
+  236: { back: 31, front: 10 },
+};
+
 /**
  * Stage 1: buildDrawSet(playerData)
  * Pure data calculation settling equipment/vanity slots, occlusion flags, and composite frames.
@@ -376,9 +459,16 @@ export function buildDrawSet(
   dyesData: DyesDataFile
 ): PlayerDrawSet {
   const showGear = options.showGear ?? true;
-  const loadoutIdx = options.loadoutIndex ?? player.currentLoadoutIndex ?? 0;
-  const armorSlots = getLoadoutArmor(loadoutIdx) || player.armor || [];
-  const dyeSlots = getLoadoutDye(loadoutIdx) || player.dye || [];
+  const currentLoadoutIdx = player.currentLoadoutIndex ?? 0;
+  const loadoutIdx = options.loadoutIndex ?? currentLoadoutIdx;
+  const inactiveLoadout = loadoutIdx === currentLoadoutIdx ? undefined : player.loadouts?.[loadoutIdx];
+  const armorSlots = inactiveLoadout?.armor ?? player.armor ?? [];
+  const dyeSlots = inactiveLoadout?.dye ?? player.dye ?? [];
+
+  const skinVar = Math.max(0, Math.min(11, player.skinVariant ?? 0));
+  const isMale = [0, 1, 2, 3, 8, 10].includes(skinVar);
+  let wearsRobe = false;
+  let angelHalo = false;
 
   const slots: SettledSlots = {
     head: 0,
@@ -387,6 +477,8 @@ export function buildDrawSet(
     wings: 0,
     shoe: 0,
     back: 0,
+    backpack: 0,
+    tail: 0,
     front: 0,
     waist: 0,
     neck: 0,
@@ -405,11 +497,14 @@ export function buildDrawSet(
     cWings: null,
     cShoe: null,
     cBack: null,
+    cBackpack: null,
+    cTail: null,
     cFront: null,
     cWaist: null,
     cNeck: null,
     cFace: null,
     cFaceFlower: null,
+    cAngelHalo: null,
     cHandOn: null,
     cHandOff: null,
     cShield: null,
@@ -419,6 +514,51 @@ export function buildDrawSet(
   const resolveDye = (id: number | undefined): [number, number, number] | null => {
     if (!id || id <= 0) return null;
     return dyesData[String(id)] ?? null;
+  };
+
+  const assignBackSlot = (backId: number, dyeCol: [number, number, number] | null) => {
+    if (BACKPACK_LAYER_IDS.has(backId)) {
+      slots.backpack = backId;
+      dyes.cBackpack = dyeCol;
+    } else if (TAIL_LAYER_IDS.has(backId)) {
+      slots.tail = backId;
+      dyes.cTail = dyeCol;
+    } else {
+      slots.back = backId;
+      dyes.cBack = dyeCol;
+      slots.front = 0;
+    }
+  };
+
+  const applyAccessory = (itemId: number, dyeCol: [number, number, number] | null) => {
+    if (itemId === 1987) {
+      angelHalo = true;
+      dyes.cAngelHalo = dyeCol;
+    }
+    const meta = armorData.accItems?.[String(itemId)];
+    if (!meta) return;
+
+    if (meta.wings) { slots.wings = meta.wings; dyes.cWings = dyeCol; }
+    const shoeId = meta.shoes ?? meta.shoe;
+    if (shoeId) { slots.shoe = shoeId; dyes.cShoe = dyeCol; }
+    if (meta.back) assignBackSlot(meta.back, dyeCol);
+    if (meta.front) { slots.front = meta.front; dyes.cFront = dyeCol; }
+    if (meta.waist) { slots.waist = meta.waist; dyes.cWaist = dyeCol; }
+    if (meta.neck) { slots.neck = meta.neck; dyes.cNeck = dyeCol; }
+    if (meta.face) {
+      // Obsidian rose (6) and flower hairpins draw in FaceFlower layer
+      if ([1, 6, 8, 9].includes(meta.face)) {
+        slots.faceFlower = meta.face;
+        dyes.cFaceFlower = dyeCol;
+      } else {
+        slots.face = meta.face;
+        dyes.cFace = dyeCol;
+      }
+    }
+    if (meta.handOn) { slots.handon = meta.handOn; dyes.cHandOn = dyeCol; }
+    if (meta.handOff) { slots.handoff = meta.handOff; dyes.cHandOff = dyeCol; }
+    if (meta.shield) { slots.shield = meta.shield; dyes.cShield = dyeCol; }
+    if (meta.balloon) { slots.balloon = meta.balloon; dyes.cBalloon = dyeCol; }
   };
 
   if (showGear) {
@@ -436,87 +576,111 @@ export function buildDrawSet(
     dyes.cLegs = resolveDye(dyeSlots[2]?.id);
 
     // 2. Visible Accessories Settlement (UpdateVisibleAccessories)
-    if (armorData.accItems) {
-      // Pass 1: Normal accessory slots 3..9
-      for (let i = 3; i < 10; i++) {
-        const accIdx = i - 3;
-        const isHidden =
-          player.loadouts?.[loadoutIdx]?.hide?.[i] === true ||
-          (loadoutIdx === (player.currentLoadoutIndex ?? 0) &&
-            player.hideVisual1 !== undefined &&
-            ((player.hideVisual1 >> accIdx) & 1) === 1);
+    // Pass 1: Normal accessory slots 3..9
+    for (let i = 3; i < 10; i++) {
+      const accIdx = i - 3;
+      const isHidden =
+        player.loadouts?.[loadoutIdx]?.hide?.[i] === true ||
+        (loadoutIdx === (player.currentLoadoutIndex ?? 0) &&
+          player.hideVisual1 !== undefined &&
+          ((player.hideVisual1 >> accIdx) & 1) === 1);
 
-        if (isHidden) continue;
+      if (isHidden) continue;
+      const item = armorSlots[i];
+      if (item && item.id > 0) applyAccessory(item.id, resolveDye(dyeSlots[i]?.id));
+    }
 
-        const item = armorSlots[i];
-        if (!item || item.id <= 0) continue;
+    // Pass 2: Vanity accessory slots 13..19 (override normal slots, always visible in Terraria)
+    for (let j = 13; j < 20; j++) {
+      const item = armorSlots[j];
+      if (item && item.id > 0) applyAccessory(item.id, resolveDye(dyeSlots[j - 10]?.id));
+    }
 
-        const dyeItem = dyeSlots[i];
-        const dyeCol = resolveDye(dyeItem?.id);
-        const meta = armorData.accItems[String(item.id)];
+    // 3. Player.SetMatch & PlayerFrame overrides (robes/dresses, gender swaps, chest capes, suppression)
+    if (slots.body === 81) {
+      if (slots.legs <= 0) {
+        slots.legs = 169;
+        wearsRobe = true;
+      }
+    } else if (slots.body in ROBE_BODY_TO_LEG) {
+      const m = ROBE_BODY_TO_LEG[slots.body];
+      slots.legs = typeof m === 'function' ? m(isMale) : m;
+      wearsRobe = slots.body !== 166;
+    }
 
-        if (meta) {
-          if (meta.wings) { slots.wings = meta.wings; dyes.cWings = dyeCol; }
-          const shoeId = meta.shoes ?? meta.shoe;
-          if (shoeId) { slots.shoe = shoeId; dyes.cShoe = dyeCol; }
-          if (meta.back) { slots.back = meta.back; dyes.cBack = dyeCol; }
-          if (meta.front) { slots.front = meta.front; dyes.cFront = dyeCol; }
-          if (meta.waist) { slots.waist = meta.waist; dyes.cWaist = dyeCol; }
-          if (meta.neck) { slots.neck = meta.neck; dyes.cNeck = dyeCol; }
-          if (meta.face) {
-            // Obsidian rose (6) and flower hairpins draw in FaceFlower layer
-            if ([1, 6, 8, 9].includes(meta.face)) {
-              slots.faceFlower = meta.face;
-              dyes.cFaceFlower = dyeCol;
-            } else {
-              slots.face = meta.face;
-              dyes.cFace = dyeCol;
-            }
-          }
-          if (meta.handOn) { slots.handon = meta.handOn; dyes.cHandOn = dyeCol; }
-          if (meta.handOff) { slots.handoff = meta.handOff; dyes.cHandOff = dyeCol; }
-          if (meta.shield) { slots.shield = meta.shield; dyes.cShield = dyeCol; }
-          if (meta.balloon) { slots.balloon = meta.balloon; dyes.cBalloon = dyeCol; }
+    if (slots.legs in LEG_GENDER_MATCH) {
+      const swapped = LEG_GENDER_MATCH[slots.legs](isMale);
+      if (swapped !== null) slots.legs = swapped;
+    }
+
+    if (slots.head === 201 && !isMale) {
+      slots.head = 202;
+    }
+
+    if (wearsRobe) {
+      dyes.cLegs = dyes.cBody;
+    }
+
+    if (slots.body === 93) {
+      slots.shield = 0;
+      slots.handoff = 0;
+    } else if (slots.body === 83) {
+      slots.handon = 0;
+      slots.handoff = 0;
+    }
+
+    if (slots.body > 0) {
+      const capeBack = !isMale && slots.body in INCLUDED_CAPE_BACK_FEMALE
+        ? INCLUDED_CAPE_BACK_FEMALE[slots.body]
+        : INCLUDED_CAPE_BACK[slots.body];
+      if (capeBack) {
+        if (BACKPACK_LAYER_IDS.has(capeBack)) {
+          slots.backpack = capeBack;
+          dyes.cBackpack = dyes.cBody;
+        } else if (TAIL_LAYER_IDS.has(capeBack)) {
+          slots.tail = capeBack;
+          dyes.cTail = dyes.cBody;
+        } else if (slots.back <= 0) {
+          slots.back = capeBack;
+          dyes.cBack = dyes.cBody;
         }
       }
-
-      // Pass 2: Vanity accessory slots 13..19 (override normal slots, always visible in Terraria)
-      for (let j = 13; j < 20; j++) {
-        const item = armorSlots[j];
-        if (!item || item.id <= 0) continue;
-
-        const dyeItem = dyeSlots[j - 10];
-        const dyeCol = resolveDye(dyeItem?.id);
-        const meta = armorData.accItems[String(item.id)];
-
-        if (meta) {
-          if (meta.wings) { slots.wings = meta.wings; dyes.cWings = dyeCol; }
-          const shoeId = meta.shoes ?? meta.shoe;
-          if (shoeId) { slots.shoe = shoeId; dyes.cShoe = dyeCol; }
-          if (meta.back) { slots.back = meta.back; dyes.cBack = dyeCol; }
-          if (meta.front) { slots.front = meta.front; dyes.cFront = dyeCol; }
-          if (meta.waist) { slots.waist = meta.waist; dyes.cWaist = dyeCol; }
-          if (meta.neck) { slots.neck = meta.neck; dyes.cNeck = dyeCol; }
-          if (meta.face) {
-            if ([1, 6, 8, 9].includes(meta.face)) {
-              slots.faceFlower = meta.face;
-              dyes.cFaceFlower = dyeCol;
-            } else {
-              slots.face = meta.face;
-              dyes.cFace = dyeCol;
-            }
-          }
-          if (meta.handOn) { slots.handon = meta.handOn; dyes.cHandOn = dyeCol; }
-          if (meta.handOff) { slots.handoff = meta.handOff; dyes.cHandOff = dyeCol; }
-          if (meta.shield) { slots.shield = meta.shield; dyes.cShield = dyeCol; }
-          if (meta.balloon) { slots.balloon = meta.balloon; dyes.cBalloon = dyeCol; }
+      const capeFront = INCLUDED_CAPE_FRONT[slots.body];
+      if (capeFront && slots.front <= 0) {
+        slots.front = capeFront;
+        dyes.cFront = dyes.cBody;
+      }
+      const both = INCLUDE_CAPE_FRONT_AND_BACK[slots.body];
+      if (both && slots.back <= 0 && slots.front <= 0) {
+        slots.front = both.front;
+        dyes.cFront = dyes.cBody;
+        if (BACKPACK_LAYER_IDS.has(both.back)) {
+          slots.backpack = both.back;
+          dyes.cBackpack = dyes.cBody;
+        } else if (TAIL_LAYER_IDS.has(both.back)) {
+          slots.tail = both.back;
+          dyes.cTail = dyes.cBody;
+        } else {
+          slots.back = both.back;
+          dyes.cBack = dyes.cBody;
         }
       }
     }
+
+    if (slots.front === 13 && CAPE_BACK_IDS.has(slots.back)) {
+      slots.front = 0;
+    }
+
+    if (slots.legs === 67 || slots.legs === 140) {
+      slots.shoe = 0;
+    }
+    if (!isMale && slots.shoe === 25) {
+      slots.shoe = 26;
+    }
   }
 
-  const skinVar = Math.max(0, Math.min(11, player.skinVariant ?? 0));
-  const isMale = [0, 1, 2, 3, 8, 10].includes(skinVar);
+  const hidesTopSkin = HIDES_TOP_SKIN_BODIES.has(slots.body);
+  const hidesBottomSkin = slots.body === 93 || HIDES_BOTTOM_SKIN_LEGS.has(slots.legs);
 
   const fullHair = armorData.fullHairHeads?.includes(slots.head) ?? false;
   const hatHair = armorData.hatHairHeads?.includes(slots.head) ?? false;
@@ -543,9 +707,10 @@ export function buildDrawSet(
     fullHair,
     hatHair,
     showHair,
-    hidesTopSkin: false,
-    hidesBottomSkin: false,
-    wearsRobe: false,
+    hidesTopSkin,
+    hidesBottomSkin,
+    wearsRobe,
+    angelHalo,
     missingHand: false,
     missingArm: false,
     compTorsoFrame,
@@ -579,9 +744,32 @@ export function collectDrawData(
     h: 56,
   });
 
-  // Layer 09: Wings are omitted in the 40x56 static standing avatar.
-  // Wing textures exceed 40x56 frame bounds (e.g. 86x62 per frame) and require a larger canvas,
-  // while several animated variants only display during flight (velocity.Y != 0).
+  if (drawSet.slots.backpack > 0 && armorData.accCoords?.back?.[String(drawSet.slots.backpack)]) {
+    commands.push({
+      layerName: '08_Backpacks',
+      textureKey: 'accessories',
+      srcRect: toRect(armorData.accCoords.back[String(drawSet.slots.backpack)]),
+      dyeColor: drawSet.dyes.cBackpack,
+    });
+  }
+
+  if (drawSet.slots.tail > 0 && armorData.accCoords?.back?.[String(drawSet.slots.tail)]) {
+    commands.push({
+      layerName: '08_1_Tails',
+      textureKey: 'accessories',
+      srcRect: toRect(armorData.accCoords.back[String(drawSet.slots.tail)]),
+      dyeColor: drawSet.dyes.cTail,
+    });
+  }
+
+  if (drawSet.slots.wings > 0 && armorData.accCoords?.wings?.[String(drawSet.slots.wings)]) {
+    commands.push({
+      layerName: '09_Wings',
+      textureKey: 'accessories',
+      srcRect: toRect(armorData.accCoords.wings[String(drawSet.slots.wings)]),
+      dyeColor: drawSet.dyes.cWings,
+    });
+  }
 
   if (drawSet.slots.back > 0 && armorData.accCoords?.back?.[String(drawSet.slots.back)]) {
     commands.push({
@@ -617,6 +805,10 @@ export function collectDrawData(
   // ---------- 12_Skin ----------
   // Vanilla draws torsoSkin AND legSkin here, both with bodyVect. The leg skin is
   // an underlay: it stays even when leg armour is worn.
+  const shoeOverridesLegs = drawSet.slots.shoe === 15;
+  const pantsOverrideLegs = !shoeOverridesLegs && PANTS_OVERRIDE_LEGS.has(drawSet.slots.legs);
+  const isBottomOverridden = shoeOverridesLegs || pantsOverrideLegs;
+
   if (!drawSet.hidesTopSkin && vLayers.torsoSkin) {
     commands.push({
       layerName: '12_Skin_Torso',
@@ -625,7 +817,7 @@ export function collectDrawData(
       tintColor: drawSet.colorSkin,
     });
   }
-  if (!drawSet.hidesBottomSkin && vLayers.legSkin) {
+  if (!drawSet.hidesBottomSkin && !isBottomOverridden && vLayers.legSkin) {
     commands.push({
       layerName: '12_Skin_Legs',
       textureKey: 'base',
@@ -677,41 +869,57 @@ export function collectDrawData(
     }
   }
 
-  // Layer 13: Leggings / Pants / LegSkin
-  if (drawSet.slots.legs > 0 && armorData.legs[String(drawSet.slots.legs)]) {
-    commands.push({
-      layerName: '13_Leggings',
-      textureKey: 'armor',
-      srcRect: toRect(armorData.legs[String(drawSet.slots.legs)]),
-      dyeColor: drawSet.dyes.cLegs,
-    });
-  } else {
-    if (vLayers.pants) {
-      commands.push({
-        layerName: '13_Pants',
-        textureKey: 'base',
-        srcRect: toRect(vLayers.pants),
-        tintColor: drawSet.colorPants,
-      });
+  const pushLegLayer = () => {
+    // Layer 13: Leggings / Pants / Shoes (leg slot 169 = Ghost Shirt skips layer 13)
+    if (drawSet.slots.legs === 169) return;
+    if (drawSet.slots.legs > 0 && armorData.legs[String(drawSet.slots.legs)]) {
+      if (!shoeOverridesLegs || drawSet.wearsRobe) {
+        commands.push({
+          layerName: '13_Leggings',
+          textureKey: 'armor',
+          srcRect: toRect(armorData.legs[String(drawSet.slots.legs)]),
+          dyeColor: drawSet.dyes.cLegs,
+        });
+      }
+    } else if (!shoeOverridesLegs) {
+      if (vLayers.pants) {
+        commands.push({
+          layerName: '13_Pants',
+          textureKey: 'base',
+          srcRect: toRect(vLayers.pants),
+          tintColor: drawSet.colorPants,
+        });
+      }
+      if (vLayers.shoes) {
+        commands.push({
+          layerName: '13_Shoes',
+          textureKey: 'base',
+          srcRect: toRect(vLayers.shoes),
+          tintColor: drawSet.colorShoes,
+        });
+      }
     }
-    if (vLayers.shoes) {
-      commands.push({
-        layerName: '13_Shoes',
-        textureKey: 'base',
-        srcRect: toRect(vLayers.shoes),
-        tintColor: drawSet.colorShoes,
-      });
-    }
-  }
+  };
 
-  // Layer 14: Shoe accessories
-  if (drawSet.slots.shoe > 0 && armorData.accCoords?.shoes?.[String(drawSet.slots.shoe)]) {
-    commands.push({
-      layerName: '14_ShoeAcc',
-      textureKey: 'accessories',
-      srcRect: toRect(armorData.accCoords.shoes[String(drawSet.slots.shoe)]),
-      dyeColor: drawSet.dyes.cShoe,
-    });
+  const pushShoeLayer = () => {
+    // Layer 14: Shoe accessories
+    if (!pantsOverrideLegs && drawSet.slots.shoe > 0 && armorData.accCoords?.shoes?.[String(drawSet.slots.shoe)]) {
+      commands.push({
+        layerName: '14_ShoeAcc',
+        textureKey: 'accessories',
+        srcRect: toRect(armorData.accCoords.shoes[String(drawSet.slots.shoe)]),
+        dyeColor: drawSet.dyes.cShoe,
+      });
+    }
+  };
+
+  // Vanilla LegacyPlayerRenderer swaps 13_Leggings and 14_Shoes when wearsRobe && body !== 166 so dresses cover boots
+  if (drawSet.wearsRobe && drawSet.slots.body !== 166) {
+    pushShoeLayer();
+    pushLegLayer();
+  } else {
+    pushLegLayer();
+    pushShoeLayer();
   }
 
   // Layer 17: Torso
@@ -888,6 +1096,16 @@ export function collectDrawData(
       dyeColor: drawSet.dyes.cFace,
     });
   }
+  if (drawSet.angelHalo && armorData.accCoords?.face?.['7']) {
+    commands.push({
+      layerName: '22_AngelHalo',
+      textureKey: 'accessories',
+      srcRect: toRect(armorData.accCoords.face['7']),
+      tintColor: { r: 200, g: 200, b: 200 },
+      dyeColor: drawSet.dyes.cAngelHalo,
+      alpha: 150 / 255,
+    });
+  }
 
   // Layer 25: Shield
   if (drawSet.slots.shield > 0 && armorData.accCoords?.shield?.[String(drawSet.slots.shield)]) {
@@ -971,12 +1189,19 @@ export function executeDrawCommands(
     const dx = cmd.destOffset?.x ?? 0;
     const dy = cmd.destOffset?.y ?? 0;
 
+    const prevAlpha = targetCtx.globalAlpha;
+    if (cmd.alpha !== undefined) {
+      targetCtx.globalAlpha = prevAlpha * cmd.alpha;
+    }
     if (cmd.dyeColor) {
       drawDyedPart(targetCtx, img, sx, sy, sw, sh, cmd.dyeColor, dx, dy);
     } else if (cmd.tintColor) {
       drawTintedPart(targetCtx, img, sx, sy, sw, sh, cmd.tintColor, dx, dy);
     } else {
       targetCtx.drawImage(img, sx, sy, sw, sh, dx, dy, sw, sh);
+    }
+    if (cmd.alpha !== undefined) {
+      targetCtx.globalAlpha = prevAlpha;
     }
   }
 }

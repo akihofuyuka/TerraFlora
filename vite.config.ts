@@ -1,10 +1,18 @@
+import fs from 'fs';
 import path from 'path';
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import { VitePWA } from 'vite-plugin-pwa';
 
+const pkg = JSON.parse(
+  fs.readFileSync(path.resolve(import.meta.dirname || process.cwd(), 'package.json'), 'utf8')
+);
+
 export default defineConfig({
   base: './',
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   esbuild: {
     legalComments: 'inline',
   },

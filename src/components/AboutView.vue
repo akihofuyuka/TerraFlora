@@ -2,6 +2,8 @@
 import { getItemSpriteStyle } from '@/utils/sprite';
 import { Card, CardContent } from '@/components/ui/card';
 import { ExternalLink } from 'lucide-vue-next';
+
+const appVersion = __APP_VERSION__;
 </script>
 
 <template>
@@ -17,7 +19,7 @@ import { ExternalLink } from 'lucide-vue-next';
           <div class="flex items-center gap-2">
             <h2 class="text-base font-bold text-[#4A3F3D] tracking-tight">TerraFlora</h2>
             <span class="text-[11px] font-mono text-[#8E807C] px-1.5 py-0.5 rounded bg-[#FFF7F2] border border-[#EADFD9]">
-              v1.0.2
+              v{{ appVersion }}
             </span>
           </div>
 

@@ -6,8 +6,8 @@
  * 单张图集容纳 32 * 48 = 1536 个物品
  */
 
-/** 图集缓存号：由 scripts/extract 管线重跑后手动递增（与 avatar.ts 的 ASSET_VERSION 同步） */
-export const ATLAS_VERSION = '7';
+/** 图集缓存号：自动跟随 package.json 版本号，随打包同步刷新缓存 */
+export const ATLAS_VERSION = __APP_VERSION__;
 
 export interface SpriteCoords {
   sheetIndex: number;

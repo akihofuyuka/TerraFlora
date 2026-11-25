@@ -120,7 +120,7 @@ function writeAtlas(cells, file, cellW, cellH, cols) {
  */
 function detectStripFrameHeight(png) {
   const { width: w, height: h } = png;
-  if (h < 8 || h < w) return null;
+  if (h < 8 || h <= w) return null;
 
   const rowEmpty = new Array(h).fill(true);
   for (let y = 0; y < h; y++) {
@@ -140,7 +140,7 @@ function detectStripFrameHeight(png) {
       start = -1;
     }
   }
-  if (blocks.length === 0) return null;
+  if (blocks.length < 2) return null;
 
   const fits = (p) => {
     if (h % p !== 0 || Math.floor(h / p) < 2) return false;
@@ -244,7 +244,7 @@ function loadJson(file, fallback) {
     console.warn(`! 缺少 ${path.relative(ROOT, file)}`);
     return fallback;
   }
-  return JSON.parse(fs.readFileSync(file, 'utf8'));
+  return JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
 }
 
 const items = loadJson(path.join(DUMP, 'items.json'), []);
@@ -488,6 +488,45 @@ if (ONLY.includes('avatar')) {
         accCoords[key][id] = accPacker.put(buf);
       }
     }
+
+    // 站立状态绘制的翅膀与斗篷型翅膀（Wings_31 星云斗篷 / Wings_41 Safeman 斗篷 等）第 0 帧居中对齐到 40x56
+    const AIRBORNE_ONLY_WINGS = new Set([22, 28, 34, 39, 40, 45, 47, 48, 49, 50, 51]);
+    const WING_OFFSETS = { 5: [4, -4], 12: [-1, -1], 27: [3, 0], 41: [-1, 0], 43: [-5, -7], 44: [0, 0] };
+    const WING_FRAMES = { 43: 7, 44: 7 };
+    accCoords.wings = {};
+    const wingList = files
+      .map((f) => {
+        const m = f.match(/^Wings_(\d+)\.png$/);
+        return m ? [+m[1], f] : null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => a[0] - b[0]);
+    for (const [wid, f] of wingList) {
+      if (AIRBORNE_ONLY_WINGS.has(wid)) continue;
+      const png = readPng(path.join(dir, f));
+      const frames = WING_FRAMES[wid] ?? 4;
+      const fh = Math.floor(png.height / frames);
+      const [ox, oy] = WING_OFFSETS[wid] ?? [0, 0];
+      const dstX = Math.floor(11 + ox - png.width / 2);
+      const dstY = Math.floor(33 + oy - fh / 2);
+      const buf = Buffer.alloc(PW * PH * 4);
+      for (let sy = 0; sy < fh; sy++) {
+        const dy = dstY + sy;
+        if (dy < 0 || dy >= PH) continue;
+        for (let sx = 0; sx < png.width; sx++) {
+          const dx = dstX + sx;
+          if (dx < 0 || dx >= PW) continue;
+          const s = (sy * png.width + sx) * 4;
+          const d = (dy * PW + dx) * 4;
+          buf[d] = png.data[s];
+          buf[d + 1] = png.data[s + 1];
+          buf[d + 2] = png.data[s + 2];
+          buf[d + 3] = png.data[s + 3];
+        }
+      }
+      if (isBlank(buf)) { empty++; continue; }
+      accCoords.wings[String(wid)] = accPacker.put(buf);
+    }
     const accSize = writeAtlas(accPacker.cells, path.join(ATLAS, 'accessories.png'), PW, PH, 16);
     console.log(`accessories: ${accSize} cells=${accPacker.cells.length} skippedEmpty=${empty}`);
 
@@ -640,4 +679,4 @@ if (UNPREMULTIPLY) {
 console.log('\n下一步：');
 console.log('  npx tsx scripts/process-pinyin.ts        # 生成 items.min.json / prefixes.min.json');
 console.log('  python scripts/extract/to-webp.py        # PNG -> 无损 WebP（需要 Pillow）');
-console.log('  然后递增 src/utils/avatar.ts 的 ASSET_VERSION');
+console.log('  然后运行 npm version patch --no-git-tag-version 递增版本号');
