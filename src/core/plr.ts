@@ -68,7 +68,8 @@ export const VERSION_GROUPS: VersionGroup[] = [
     group: "1.4.x",
     desc: "旅途的终点及后续大更新 (共 40 个版本，包含 Loadouts 配置与微光)",
     versions: [
-      { version: 329, gameVersion: "1.4.6", highlight: true },
+      { version: 329, gameVersion: "1.4.6.1", highlight: true },
+      { version: 329, gameVersion: "1.4.6" },
       { version: 326, gameVersion: "1.4.5.8" },
       { version: 325, gameVersion: "1.4.5.7" },
       { version: 319, gameVersion: "1.4.5.6" },

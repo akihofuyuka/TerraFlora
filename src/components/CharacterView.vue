@@ -82,7 +82,7 @@ function setFullMana() {
 }
 
 function getVersionFeatureSummary(v: number): string {
-  if (v >= 329) return "1.4.6 · 最新官方正式版";
+  if (v >= 329) return "1.4.6.1 · 最新官方正式版";
   if (v >= 315) return "1.4.5 · 法爷归来";
   if (v >= 279) return "1.4.4.9 · 三套独立配置与微光";
   if (v >= 262) return "1.4.4 · 包含三套独立装备配置";
