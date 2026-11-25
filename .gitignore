@@ -28,6 +28,7 @@ AVATAR_RENDER.md
 dev/
 src/dev/
 *.plr
+!src/core/__tests__/fixtures/*.plr
 *.bak
 
 # Environment variables

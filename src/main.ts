@@ -2,7 +2,7 @@
 import { createApp } from 'vue';
 import './style.css';
 import App from './App.vue';
-import { reportError } from './store';
+import { reportError, store } from './store';
 
 const app = createApp(App);
 
@@ -32,3 +32,13 @@ window.addEventListener('error', (event) => {
 });
 
 app.mount('#app');
+
+if ('serviceWorker' in navigator) {
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!refreshing && !store.isModified && !store.player) {
+      refreshing = true;
+      window.location.reload();
+    }
+  });
+}

@@ -12,6 +12,8 @@ import {
   serializePlr,
   sanitizePlayerForVersion,
   createDefaultPlayer,
+  unpackTempSlots,
+  packTempSlots,
 } from "./core/plr";
 import { AppError, toAppError } from "./core/errors";
 
@@ -49,7 +51,7 @@ export interface BuffItem {
 }
 
 export interface SelectedSlotInfo {
-  slotType: "inventory" | "armor" | "armorVanity" | "armorDye" | "miscEquips" | "miscDyes" | "bank" | "bank2" | "bank3" | "bank4";
+  slotType: "inventory" | "armor" | "armorVanity" | "armorDye" | "miscEquips" | "miscDyes" | "bank" | "bank2" | "bank3" | "bank4" | "tempSlot" | "refundSlot";
   index: number;
   item: ItemData;
   loadoutIdx?: number; // 0, 1, 2
@@ -77,7 +79,7 @@ export interface StoreState {
   isModified: boolean;
   activeTab: "inventory" | "equipment" | "character" | "research" | "buff" | "about";
   inventorySubTab: "main" | "piggy" | "safe" | "forge" | "void";
-  characterSubTab: "base" | "appearance" | "permanent";
+  characterSubTab: "base" | "appearance" | "permanent" | "archive";
   loadoutTab: number; // 当前在装备页面查看的配置 (0, 1, 2)
   selectedSlot: SelectedSlotInfo | null;
   isMoveMode: boolean;
@@ -639,14 +641,16 @@ export function getSlotArray(slotType: SelectedSlotInfo["slotType"], loadoutIdx 
     case "bank2": return store.player.bank2;
     case "bank3": return store.player.bank3;
     case "bank4": return store.player.bank4;
+    case "tempSlot": return unpackTempSlots(store.player.tempBitmask, store.player.tempItems);
+    case "refundSlot": return store.player.refunds;
     default: return [];
   }
 }
 
 /**
- * 获取对应槽位的真实底层数组引用及其真实下标 (支持 armorVanity 偏移)
+ * 获取对应槽位的真实底层数组引用及其真实下标 (支持 armorVanity 偏移及稀疏 tempSlot 同步)
  */
-export function getTargetItemRef(slotType: SelectedSlotInfo["slotType"], index: number, loadoutIdx = store.loadoutTab): { arr: ItemData[]; realIdx: number } | null {
+export function getTargetItemRef(slotType: SelectedSlotInfo["slotType"], index: number, loadoutIdx = store.loadoutTab): { arr: ItemData[]; realIdx: number; commit?: () => void } | null {
   if (!store.player) return null;
   if (slotType === "armor") {
     const arr = getLoadoutArmor(loadoutIdx);
@@ -659,6 +663,19 @@ export function getTargetItemRef(slotType: SelectedSlotInfo["slotType"], index: 
   if (slotType === "armorDye") {
     const arr = getLoadoutDye(loadoutIdx);
     return { arr, realIdx: index };
+  }
+  if (slotType === "tempSlot") {
+    const player = store.player;
+    const slots = unpackTempSlots(player.tempBitmask, player.tempItems);
+    return {
+      arr: slots,
+      realIdx: index,
+      commit: () => {
+        const packed = packTempSlots(slots);
+        player.tempBitmask = packed.tempBitmask;
+        player.tempItems = packed.tempItems;
+      },
+    };
   }
   const arr = getSlotArray(slotType, loadoutIdx);
   return { arr, realIdx: index };
@@ -676,13 +693,21 @@ export function swapSlots(
   tgtLoadoutIdx: number
 ) {
   const srcRef = getTargetItemRef(srcType, srcIndex, srcLoadoutIdx);
-  const tgtRef = getTargetItemRef(tgtType, tgtIndex, tgtLoadoutIdx);
+  const tgtRef =
+    srcType === "tempSlot" && tgtType === "tempSlot" && srcRef
+      ? { arr: srcRef.arr, realIdx: tgtIndex, commit: srcRef.commit }
+      : getTargetItemRef(tgtType, tgtIndex, tgtLoadoutIdx);
 
   if (!srcRef || !tgtRef || !srcRef.arr[srcRef.realIdx] || !tgtRef.arr[tgtRef.realIdx]) return false;
 
   const temp = { ...srcRef.arr[srcRef.realIdx] };
   srcRef.arr[srcRef.realIdx] = { ...tgtRef.arr[tgtRef.realIdx] };
   tgtRef.arr[tgtRef.realIdx] = temp;
+
+  srcRef.commit?.();
+  if (tgtRef !== srcRef && tgtRef.commit !== srcRef.commit) {
+    tgtRef.commit?.();
+  }
 
   store.isModified = true;
   return true;
@@ -843,6 +868,12 @@ export function cancelMoveMode() {
   store.moveSourceSlot = null;
 }
 
+export function togglePlayerFavorite() {
+  if (!store.player) return;
+  store.player.isFavorite = store.player.isFavorite !== 0n ? 0n : 1n;
+  store.isModified = true;
+}
+
 /**
  * 取消当前选中的格子
  */
@@ -862,6 +893,7 @@ export function updateSelectedSlot(patch: Partial<ItemData>) {
 
   const current = targetRef.arr[targetRef.realIdx];
   Object.assign(current, patch);
+  targetRef.commit?.();
   store.selectedSlot.item = { ...current };
   store.isModified = true;
 }

@@ -1,7 +1,9 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { BinaryReader, BinaryWriter } from '../binary';
 import { decryptPlr, encryptPlr } from '../crypto';
-import { createDefaultPlayer, getMaxBuffIdForVersion, getMaxItemIdForVersion, parsePlr, sanitizePlayerForVersion, serializePlr } from '../plr';
+import { createDefaultPlayer, getMaxBuffIdForVersion, getMaxItemIdForVersion, packTempSlots, parsePlr, sanitizePlayerForVersion, serializePlr, unpackTempSlots } from '../plr';
 import { AppError, formatDiagnosticReport, toAppError } from '../errors';
 
 describe('BinaryReader & BinaryWriter', () => {
@@ -113,6 +115,105 @@ describe('PLR Parser & Serializer', () => {
     expect(getMaxBuffIdForVersion(279)).toBe(354);
     expect(getMaxBuffIdForVersion(194)).toBe(205);
     expect(getMaxBuffIdForVersion(102)).toBe(139);
+  });
+
+  it('serializes and parses cleanly across historical protocol eras (1.4.3.6 / 1.4.0.5 / 1.3.5.3 / 1.2.4.1)', () => {
+    const hero = createDefaultPlayer('TimeTraveler', 329);
+    hero.anglerQuestsFinished = 30;
+    hero.golferScore = 2000;
+    hero.taxMoney = 12345;
+    hero.spawns = [{ sx: 100, sy: 200, wid: 42, sname: 'HomeWorld' }];
+
+    for (const ver of [248, 230, 194, 102]) {
+      const { player: cleaned } = sanitizePlayerForVersion(hero, ver, 'relogic');
+      const bytes = serializePlr(cleaned, ver, 'relogic');
+      const parsed = parsePlr(bytes);
+      expect(parsed.version).toBe(ver);
+      expect(parsed.name).toBe('TimeTraveler');
+      expect(parsed.anglerQuestsFinished).toBe(30);
+      expect(parsed.spawns).toEqual([{ sx: 100, sy: 200, wid: 42, sname: 'HomeWorld' }]);
+      if (ver >= 206) expect(parsed.golferScore).toBe(2000);
+      if (ver >= 128) expect(parsed.taxMoney).toBe(12345);
+    }
+  });
+
+  it('round-trips real game .plr fixtures byte-for-byte and safely downgrades 1.4.5.8 -> 1.4.4.9', async () => {
+    const fixturesDir = path.resolve(import.meta.dirname, 'fixtures');
+    for (const [filename, expectedVer] of [['test1449.plr', 279], ['test1458.plr', 326]] as const) {
+      const encrypted = new Uint8Array(fs.readFileSync(path.join(fixturesDir, filename)));
+      const decrypted = await decryptPlr(encrypted);
+      const player = parsePlr(decrypted);
+      expect(player.version).toBe(expectedVer);
+      expect(player.name).toBe('test');
+
+      const reserialized = serializePlr(player, expectedVer);
+      expect(reserialized).toEqual(decrypted);
+    }
+
+    const enc1458 = new Uint8Array(fs.readFileSync(path.join(fixturesDir, 'test1458.plr')));
+    const p1458 = parsePlr(await decryptPlr(enc1458));
+    const { player: downgraded, removedItems } = sanitizePlayerForVersion(p1458, 279, 'relogic');
+    expect(removedItems).toBeGreaterThan(0);
+    const bytes1449 = serializePlr(downgraded, 279, 'relogic');
+    const reparsed = parsePlr(bytes1449);
+    expect(reparsed.version).toBe(279);
+    expect(reparsed.inventory.every((it) => it.id <= 5455)).toBe(true);
+    expect(reparsed.armor.every((it) => it.id <= 5455)).toBe(true);
+    expect(reparsed.loadouts.every((l) => l.armor.every((it) => it.id <= 5455))).toBe(true);
+
+    // 验证心动国服零填充真机样本 (xindong, 1.4.5.8 v326) 与降级清洗
+    const encXd = new Uint8Array(fs.readFileSync(path.join(fixturesDir, 'test1458xd.plr')));
+    const pXd = parsePlr(await decryptPlr(encXd));
+    expect(pXd.version).toBe(326);
+    expect(new TextDecoder().decode(pXd.magic)).toBe('xindong');
+    expect(pXd.inventory.some((it) => it.id === 6196)).toBe(true);
+    expect(pXd.armor.some((it) => it.id === 6197)).toBe(true);
+
+    const { player: xdDowngraded, removedItems: xdRemoved } = sanitizePlayerForVersion(pXd, 279, 'relogic');
+    expect(xdRemoved).toBeGreaterThanOrEqual(6);
+    const xdTo1449 = parsePlr(serializePlr(xdDowngraded, 279, 'relogic'));
+    expect(xdTo1449.inventory.every((it) => it.id <= 5455)).toBe(true);
+    expect(xdTo1449.armor.every((it) => it.id <= 5455)).toBe(true);
+  });
+
+  it('clamps negative death counts and tax money to non-negative integers', () => {
+    const hero = createDefaultPlayer('DeathClamp', 329);
+    hero.pveDeaths = -29586;
+    hero.pvpDeaths = -12;
+    hero.taxMoney = -500;
+    const bytes = serializePlr(hero, 329, 'relogic');
+    const parsed = parsePlr(bytes);
+    expect(parsed.pveDeaths).toBe(0);
+    expect(parsed.pvpDeaths).toBe(0);
+    expect(parsed.taxMoney).toBe(0);
+  });
+
+  it('packs, unpacks, and round-trips sparse temp slots, spawns, refunds, and dialogues', () => {
+    const hero = createDefaultPlayer('ArchiveEdit', 329);
+    hero.spawns = [{ sx: 1200, sy: 450, wid: 98765, sname: 'EditedWorld' }];
+    const packed = packTempSlots([
+      { id: 0, stack: 0, prefix: 0 },
+      { id: 75, stack: 5, prefix: 0 },
+      { id: 0, stack: 0, prefix: 0 },
+      { id: 4956, stack: 1, prefix: 81 },
+    ]);
+    hero.tempBitmask = packed.tempBitmask;
+    hero.tempItems = packed.tempItems;
+    hero.refunds = [{ id: 2, stack: 10, prefix: 0 }];
+    hero.dialogues = ['GuideSpecialText.Example'];
+
+    const bytes = serializePlr(hero, 329, 'relogic');
+    const parsed = parsePlr(bytes);
+    expect(parsed.spawns).toEqual([{ sx: 1200, sy: 450, wid: 98765, sname: 'EditedWorld' }]);
+    expect(parsed.tempBitmask).toBe(10);
+    expect(unpackTempSlots(parsed.tempBitmask, parsed.tempItems)).toEqual([
+      { id: 0, stack: 0, prefix: 0 },
+      { id: 75, stack: 5, prefix: 0 },
+      { id: 0, stack: 0, prefix: 0 },
+      { id: 4956, stack: 1, prefix: 81 },
+    ]);
+    expect(parsed.refunds).toEqual([{ id: 2, stack: 10, prefix: 0, favorited: false }]);
+    expect(parsed.dialogues).toEqual(['GuideSpecialText.Example']);
   });
 
   it('detects .wld world files and invalid magic headers', () => {

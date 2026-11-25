@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { getItemSpriteStyle, getHairSpriteStyle, HAIR_COUNT } from '@/utils/sprite';
 import CharacterAvatar from '@/components/CharacterAvatar.vue';
+import CharacterArchivePanel from '@/components/CharacterArchivePanel.vue';
 
 const p = computed(() => store.player);
 const currentVersionInfo = computed(() => findVersionInfo(store.targetVersion));
@@ -25,6 +26,7 @@ const subTabs = [
   { id: 'base' as const, label: '基础属性', itemId: 29 },       // 生命水晶
   { id: 'appearance' as const, label: '外观设置', itemId: 239 }, // 便服衬衫
   { id: 'permanent' as const, label: '永久能力', itemId: 3335 }, // 恶魔之心
+  { id: 'archive' as const, label: '档案与开关', itemId: 5437 }, // 贝壳电话
 ];
 
 // ----------------- 折叠状态管理 -----------------
@@ -100,6 +102,7 @@ function unlockAllPermanent() {
   p.value.usingBiomeTorches = true;
   p.value.ateArtisanBread = true;
   p.value.finishedDD2 = true;
+  p.value.superCart = (p.value.superCart ?? 0) | 3;
   p.value.aegisCrystal = true;
   p.value.aegisFruit = true;
   p.value.arcaneCrystal = true;
@@ -963,6 +966,17 @@ const shimmerItems = [
               @update:checked="(val: boolean) => { if (p) { p.finishedDD2 = val; store.isModified = true; } }"
             />
           </div>
+
+          <div class="flex items-center justify-between p-2 rounded-lg bg-[#FFF7F2] border border-[#EADFD9] text-xs sm:col-span-2">
+            <span class="font-medium text-[#4A3F3D] flex items-center gap-1.5">
+              <span :style="{ ...getItemSpriteStyle(5289, 14), imageRendering: 'pixelated' }"></span>
+              <span>矿车升级包 (永久解锁 · 1.4.4+)</span>
+            </span>
+            <Switch
+              :checked="((p.superCart ?? 0) & 1) !== 0"
+              @update:checked="(val: boolean) => { if (p) { p.superCart = val ? ((p.superCart ?? 0) | 1) : ((p.superCart ?? 0) & ~1); store.isModified = true; } }"
+            />
+          </div>
         </div>
 
         <!-- 6 个微光永久升级 -->
@@ -984,6 +998,9 @@ const shimmerItems = [
         </div>
       </CardContent>
     </Card>
+
+    <!-- 4. 档案与开关 (游玩统计、矿车/虚空袋、出生点、信息/建筑开关) -->
+    <CharacterArchivePanel v-if="store.characterSubTab === 'archive'" />
 
     <!-- 染发剂选择弹窗 -->
     <Teleport to="body">

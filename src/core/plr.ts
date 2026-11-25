@@ -326,75 +326,76 @@ export function parsePlr(buffer: Uint8Array): PlayerData {
   const r = new BinaryReader(buffer);
 
   const version = r.readInt32();
-  const magic = r.readBytes(7);
-  const magicStr = new TextDecoder().decode(magic);
-  if (magicStr !== "relogic" && magicStr !== "xindong") {
-    throw new AppError(
-      'FILE_FORMAT',
-      '不是有效的泰拉瑞亚角色存档',
-      {
-        suggestion: '请确认上传的是游戏 Players 目录下的 .plr 文件，而非 .plr.bak2、图片或其他无关文件。',
-        context: { version, magicHex: Array.from(magic).map((b) => b.toString(16).padStart(2, '0')).join(' ') },
-      },
-      `文件标识为 "${magicStr}"，预期为 "relogic" 或 "xindong"`
-    );
+  let magic: Uint8Array = new TextEncoder().encode("relogic");
+  let fileType = 3;
+  let revision = 1;
+  let isFavorite = 0n;
+
+  if (version >= 135) {
+    magic = r.readBytes(7);
+    const magicStr = new TextDecoder().decode(magic);
+    if (magicStr !== "relogic" && magicStr !== "xindong") {
+      throw new AppError(
+        'FILE_FORMAT',
+        '不是有效的泰拉瑞亚角色存档',
+        {
+          suggestion: '请确认上传的是游戏 Players 目录下的 .plr 文件，而非 .plr.bak2、图片或其他无关文件。',
+          context: { version, magicHex: Array.from(magic).map((b) => b.toString(16).padStart(2, '0')).join(' ') },
+        },
+        `文件标识为 "${magicStr}"，预期为 "relogic" 或 "xindong"`
+      );
+    }
+    fileType = r.readUInt8();
+    if (fileType !== 3) {
+      const isWorld = fileType === 2;
+      throw new AppError(
+        'FILE_FORMAT',
+        isWorld ? '检测到这可能是地图存档 (.wld)' : '存档文件类型不匹配',
+        {
+          suggestion: isWorld
+            ? '本编辑器仅支持修改角色存档 (.plr)；如需转换地图签名，请点击主界面向导中的“签名互转”工具。'
+            : '请确认上传的是角色存档 (.plr) 文件。',
+          context: { version, magicStr, fileType },
+        },
+        `类型码为 ${fileType}，预期为 3`
+      );
+    }
+    revision = r.readUInt32();
+    isFavorite = r.readUInt64();
   }
-  const fileType = r.readUInt8();
-  if (fileType !== 3) {
-    const isWorld = fileType === 2;
-    throw new AppError(
-      'FILE_FORMAT',
-      isWorld ? '检测到这可能是地图存档 (.wld)' : '存档文件类型不匹配',
-      {
-        suggestion: isWorld
-          ? '本编辑器仅支持修改角色存档 (.plr)；如需转换地图签名，请点击主界面向导中的“签名互转”工具。'
-          : '请确认上传的是角色存档 (.plr) 文件。',
-        context: { version, magicStr, fileType },
-      },
-      `类型码为 ${fileType}，预期为 3`
-    );
-  }
-  const revision = r.readUInt32();
-  const isFavorite = r.readUInt64();
 
   const name = r.readString();
-  const difficulty = r.readUInt8();
-  const playTime = r.readInt64();
+  const difficulty = version >= 17 ? r.readUInt8() : (version >= 10 && r.readBoolean() ? 2 : 0);
+  const playTime = version >= 138 ? r.readInt64() : 0n;
 
   const hair = r.readInt32();
-  const hairDye = r.readUInt8();
-  let team = 0;
-  if (version >= 283) {
-    team = r.readUInt8();
-  }
-  const hideVisual1 = r.readUInt8();
-  const hideVisual2 = r.readUInt8();
-  const hideMisc = r.readUInt8();
-  const skinVariant = r.readUInt8();
+  const hairDye = version >= 82 ? r.readUInt8() : 0;
+  const team = version >= 283 ? r.readUInt8() : 0;
+  const hideVisual1 = version >= 83 ? r.readUInt8() : 0;
+  const hideVisual2 = version >= 124 ? r.readUInt8() : 0;
+  const hideMisc = version >= 119 ? r.readUInt8() : 0;
+  const skinVariant = version >= 107 ? r.readUInt8() : (r.readBoolean() ? 0 : 4);
 
   const statLife = r.readInt32();
   const statLifeMax = r.readInt32();
   const statMana = r.readInt32();
   const statManaMax = r.readInt32();
 
-  const extraAccessory = r.readBoolean();
-  const unlockedBiomeTorches = r.readBoolean();
-  const usingBiomeTorches = r.readBoolean();
-  const ateArtisanBread = r.readBoolean();
-  let v324Flag = false;
-  if (version >= 324) {
-    v324Flag = r.readBoolean();
-  }
-  const aegisCrystal = r.readBoolean();
-  const aegisFruit = r.readBoolean();
-  const arcaneCrystal = r.readBoolean();
-  const galaxyPearl = r.readBoolean();
-  const gummyWorm = r.readBoolean();
-  const ambrosia = r.readBoolean();
-  const finishedDD2 = r.readBoolean();
-  const taxMoney = r.readInt32();
-  const pveDeaths = r.readInt32();
-  const pvpDeaths = r.readInt32();
+  const extraAccessory = version >= 125 ? r.readBoolean() : false;
+  const unlockedBiomeTorches = version >= 229 ? r.readBoolean() : false;
+  const usingBiomeTorches = version >= 229 ? r.readBoolean() : false;
+  const ateArtisanBread = version >= 256 ? r.readBoolean() : false;
+  const v324Flag = version >= 324 ? r.readBoolean() : false;
+  const aegisCrystal = version >= 260 ? r.readBoolean() : false;
+  const aegisFruit = version >= 260 ? r.readBoolean() : false;
+  const arcaneCrystal = version >= 260 ? r.readBoolean() : false;
+  const galaxyPearl = version >= 260 ? r.readBoolean() : false;
+  const gummyWorm = version >= 260 ? r.readBoolean() : false;
+  const ambrosia = version >= 260 ? r.readBoolean() : false;
+  const finishedDD2 = version >= 182 ? r.readBoolean() : false;
+  const taxMoney = version >= 128 ? Math.max(0, r.readInt32()) : 0;
+  const pveDeaths = version >= 254 ? Math.max(0, r.readInt32()) : 0;
+  const pvpDeaths = version >= 254 ? Math.max(0, r.readInt32()) : 0;
 
   const hairColor = r.readRGB();
   const skinColor = r.readRGB();
@@ -404,9 +405,9 @@ export function parsePlr(buffer: Uint8Array): PlayerData {
   const pantsColor = r.readRGB();
   const shoeColor = r.readRGB();
 
-  const readEquip = (hasFav: boolean): ItemData => {
+  const readEquip = (hasFav: boolean, hasPrefix = true): ItemData => {
     const id = r.readInt32();
-    const prefix = r.readUInt8();
+    const prefix = hasPrefix ? r.readUInt8() : 0;
     let favorited = false;
     if (hasFav) favorited = r.readBoolean();
     return { id, stack: 1, prefix, favorited };
@@ -422,22 +423,33 @@ export function parsePlr(buffer: Uint8Array): PlayerData {
   };
 
   // 顶层装备 (20 防具/饰品 + 10 染料)
+  const armorCount = version >= 124 ? 20 : 16;
   const armor: ItemData[] = [];
-  for (let i = 0; i < 20; i++) armor.push(readEquip(version >= 322));
+  for (let i = 0; i < armorCount; i++) armor.push(readEquip(version >= 322, version >= 81));
+  while (armor.length < 20) armor.push({ id: 0, stack: 1, prefix: 0 });
 
+  const dyeCount = version >= 124 ? 10 : (version >= 47 ? 8 : 0);
   const dye: ItemData[] = [];
-  for (let i = 0; i < 10; i++) dye.push(readEquip(version >= 322));
+  for (let i = 0; i < dyeCount; i++) dye.push(readEquip(version >= 322, version >= 81));
+  while (dye.length < 10) dye.push({ id: 0, stack: 1, prefix: 0 });
 
   // 主背包 (58 格)
   const inventory: ItemData[] = [];
-  for (let i = 0; i < 58; i++) inventory.push(readItemWithStack(true));
+  for (let i = 0; i < 58; i++) inventory.push(readItemWithStack(version >= 114));
 
   // 特殊装备与染料 (5 对交错存储)
   const miscEquips: ItemData[] = [];
   const miscDyes: ItemData[] = [];
-  for (let i = 0; i < 5; i++) {
-    miscEquips.push(readEquip(false));
-    miscDyes.push(readEquip(false));
+  if (version >= 136) {
+    for (let i = 0; i < 5; i++) {
+      miscEquips.push(readEquip(false));
+      miscDyes.push(readEquip(false));
+    }
+  } else {
+    for (let i = 0; i < 5; i++) {
+      miscEquips.push({ id: 0, stack: 1, prefix: 0 });
+      miscDyes.push({ id: 0, stack: 1, prefix: 0 });
+    }
   }
 
   // 四大个人仓库 (各 40 格)
@@ -459,7 +471,7 @@ export function parsePlr(buffer: Uint8Array): PlayerData {
   } else {
     for (let i = 0; i < 40; i++) bank4.push({ id: 0, stack: 0, prefix: 0 });
   }
-  const voidVaultByte = version >= 253 ? r.readUInt8() : 0;
+  const voidVaultByte = version >= 199 ? r.readUInt8() : 0;
 
   // 增益 Buff
   const buffCount = version >= 252 ? 44 : (version < 74 ? 10 : 22);
@@ -480,20 +492,29 @@ export function parsePlr(buffer: Uint8Array): PlayerData {
     spawns.push({ sx, sy: r.readInt32(), wid: r.readInt32(), sname: r.readString() });
   }
 
-  const hbLocked = r.readBoolean();
-  const hideInfo: boolean[] = [];
-  for (let i = 0; i < 13; i++) hideInfo.push(r.readBoolean());
-  const anglerQuestsFinished = r.readInt32();
-  const dpad: number[] = [];
-  for (let i = 0; i < 4; i++) dpad.push(r.readInt32());
-  const builderAcc: number[] = [];
-  for (let i = 0; i < 12; i++) builderAcc.push(r.readInt32());
-  const bartender = r.readInt32();
-  const dead = r.readBoolean();
+  const hbLocked = version >= 200 ? r.readBoolean() : false;
+  const hideInfo: boolean[] = Array(13).fill(false);
+  if (version >= 115) {
+    for (let i = 0; i < 13; i++) hideInfo[i] = r.readBoolean();
+  }
+  const anglerQuestsFinished = version >= 98 ? r.readInt32() : 0;
+  const dpad: number[] = [0, 0, 0, 0];
+  if (version >= 162) {
+    for (let i = 0; i < 4; i++) dpad[i] = r.readInt32();
+  }
+  const builderAccCount =
+    version >= 230 ? 12 :
+    version >= 197 ? 11 :
+    version >= 167 ? 10 :
+    version >= 164 ? 8 : 0;
+  const builderAcc: number[] = [1, ...Array(11).fill(0)];
+  for (let i = 0; i < builderAccCount; i++) builderAcc[i] = r.readInt32();
+  const bartender = version >= 181 ? r.readInt32() : 0;
+  const dead = version >= 200 ? r.readBoolean() : false;
   let respawnTimer = 0;
   if (dead) respawnTimer = r.readInt32();
-  const lastSaved = r.readInt64();
-  const golferScore = r.readInt32();
+  const lastSaved = version >= 202 ? r.readInt64() : 0n;
+  const golferScore = version >= 206 ? r.readInt32() : 0;
 
   let crFlag = false;
   const creativeUnlocks: { k: string; v: number }[] = [];
@@ -507,10 +528,12 @@ export function parsePlr(buffer: Uint8Array): PlayerData {
     }
   }
 
-  const tempBitmask = r.readUInt8();
+  const tempBitmask = version >= 214 ? r.readUInt8() : 0;
   const tempItems: ItemData[] = [];
-  for (let i = 0; i < 4; i++) {
-    if ((tempBitmask & (1 << i)) !== 0) tempItems.push(readItemWithStack(false));
+  if (version >= 214) {
+    for (let i = 0; i < 4; i++) {
+      if ((tempBitmask & (1 << i)) !== 0) tempItems.push(readItemWithStack(false));
+    }
   }
 
   const creativePowers: CreativePowerData[] = [];
@@ -651,47 +674,60 @@ export function serializePlr(p: PlayerData, overrideVersion?: number, overrideMa
   const magic = overrideMagic ? new TextEncoder().encode(overrideMagic) : p.magic;
 
   w.writeInt32(version);
-  w.writeBytes(magic);
-  w.writeUInt8(p.fileType);
-  w.writeUInt32(p.revision);
-  w.writeUInt64(p.isFavorite);
+  if (version >= 135) {
+    w.writeBytes(magic);
+    w.writeUInt8(p.fileType);
+    w.writeUInt32(p.revision);
+    w.writeUInt64(p.isFavorite);
+  }
 
   w.writeString(p.name);
-  w.writeUInt8(p.difficulty);
-  w.writeInt64(p.playTime);
+  if (version >= 17) {
+    w.writeUInt8(p.difficulty);
+  } else if (version >= 10) {
+    w.writeBoolean(p.difficulty === 2);
+  }
+  if (version >= 138) w.writeInt64(p.playTime);
 
   w.writeInt32(p.hair);
-  w.writeUInt8(p.hairDye);
-  if (version >= 283) {
-    w.writeUInt8(p.team);
+  if (version >= 82) w.writeUInt8(p.hairDye);
+  if (version >= 283) w.writeUInt8(p.team);
+  if (version >= 83) w.writeUInt8(p.hideVisual1);
+  if (version >= 124) w.writeUInt8(p.hideVisual2);
+  if (version >= 119) w.writeUInt8(p.hideMisc);
+  if (version >= 107) {
+    w.writeUInt8(p.skinVariant);
+  } else {
+    const isMale = [0, 1, 2, 3, 8, 10].includes(p.skinVariant);
+    w.writeBoolean(isMale);
   }
-  w.writeUInt8(p.hideVisual1);
-  w.writeUInt8(p.hideVisual2);
-  w.writeUInt8(p.hideMisc);
-  w.writeUInt8(p.skinVariant);
 
   w.writeInt32(p.statLife);
   w.writeInt32(p.statLifeMax);
   w.writeInt32(p.statMana);
   w.writeInt32(p.statManaMax);
 
-  w.writeBoolean(p.extraAccessory);
-  w.writeBoolean(p.unlockedBiomeTorches);
-  w.writeBoolean(p.usingBiomeTorches);
-  w.writeBoolean(p.ateArtisanBread);
-  if (version >= 324) {
-    w.writeBoolean(p.v324Flag);
+  if (version >= 125) w.writeBoolean(p.extraAccessory);
+  if (version >= 229) {
+    w.writeBoolean(p.unlockedBiomeTorches);
+    w.writeBoolean(p.usingBiomeTorches);
   }
-  w.writeBoolean(p.aegisCrystal);
-  w.writeBoolean(p.aegisFruit);
-  w.writeBoolean(p.arcaneCrystal);
-  w.writeBoolean(p.galaxyPearl);
-  w.writeBoolean(p.gummyWorm);
-  w.writeBoolean(p.ambrosia);
-  w.writeBoolean(p.finishedDD2);
-  w.writeInt32(p.taxMoney);
-  w.writeInt32(p.pveDeaths);
-  w.writeInt32(p.pvpDeaths);
+  if (version >= 256) w.writeBoolean(p.ateArtisanBread);
+  if (version >= 324) w.writeBoolean(p.v324Flag);
+  if (version >= 260) {
+    w.writeBoolean(p.aegisCrystal);
+    w.writeBoolean(p.aegisFruit);
+    w.writeBoolean(p.arcaneCrystal);
+    w.writeBoolean(p.galaxyPearl);
+    w.writeBoolean(p.gummyWorm);
+    w.writeBoolean(p.ambrosia);
+  }
+  if (version >= 182) w.writeBoolean(p.finishedDD2);
+  if (version >= 128) w.writeInt32(Math.max(0, Math.floor(p.taxMoney || 0)));
+  if (version >= 254) {
+    w.writeInt32(Math.max(0, Math.floor(p.pveDeaths || 0)));
+    w.writeInt32(Math.max(0, Math.floor(p.pvpDeaths || 0)));
+  }
 
   w.writeRGB(p.hairColor);
   w.writeRGB(p.skinColor);
@@ -701,9 +737,9 @@ export function serializePlr(p: PlayerData, overrideVersion?: number, overrideMa
   w.writeRGB(p.pantsColor);
   w.writeRGB(p.shoeColor);
 
-  const writeEquip = (it: ItemData, hasFav: boolean) => {
+  const writeEquip = (it: ItemData, hasFav: boolean, hasPrefix = true) => {
     w.writeInt32(it.id);
-    w.writeUInt8(it.prefix);
+    if (hasPrefix) w.writeUInt8(it.prefix);
     if (hasFav) w.writeBoolean(!!it.favorited);
   };
 
@@ -714,13 +750,17 @@ export function serializePlr(p: PlayerData, overrideVersion?: number, overrideMa
     if (hasFav) w.writeBoolean(!!it.favorited);
   };
 
-  for (let i = 0; i < 20; i++) writeEquip(p.armor[i] || { id: 0, stack: 1, prefix: 0 }, version >= 322);
-  for (let i = 0; i < 10; i++) writeEquip(p.dye[i] || { id: 0, stack: 1, prefix: 0 }, version >= 322);
-  for (let i = 0; i < 58; i++) writeItemWithStack(p.inventory[i] || { id: 0, stack: 0, prefix: 0 }, true);
+  const armorCount = version >= 124 ? 20 : 16;
+  for (let i = 0; i < armorCount; i++) writeEquip(p.armor[i] || { id: 0, stack: 1, prefix: 0 }, version >= 322, version >= 81);
+  const dyeCount = version >= 124 ? 10 : (version >= 47 ? 8 : 0);
+  for (let i = 0; i < dyeCount; i++) writeEquip(p.dye[i] || { id: 0, stack: 1, prefix: 0 }, version >= 322, version >= 81);
+  for (let i = 0; i < 58; i++) writeItemWithStack(p.inventory[i] || { id: 0, stack: 0, prefix: 0 }, version >= 114);
 
-  for (let i = 0; i < 5; i++) {
-    writeEquip(p.miscEquips[i] || { id: 0, stack: 1, prefix: 0 }, false);
-    writeEquip(p.miscDyes[i] || { id: 0, stack: 1, prefix: 0 }, false);
+  if (version >= 136) {
+    for (let i = 0; i < 5; i++) {
+      writeEquip(p.miscEquips[i] || { id: 0, stack: 1, prefix: 0 }, false);
+      writeEquip(p.miscDyes[i] || { id: 0, stack: 1, prefix: 0 }, false);
+    }
   }
 
   for (let i = 0; i < 40; i++) writeItemWithStack(p.bank[i] || { id: 0, stack: 0, prefix: 0 }, false);
@@ -731,7 +771,7 @@ export function serializePlr(p: PlayerData, overrideVersion?: number, overrideMa
   if (version >= 198) {
     for (let i = 0; i < 40; i++) writeItemWithStack(p.bank4[i] || { id: 0, stack: 0, prefix: 0 }, version >= 255);
   }
-  if (version >= 253) w.writeUInt8(p.voidVaultByte);
+  if (version >= 199) w.writeUInt8(p.voidVaultByte);
 
   const buffCount = version >= 252 ? 44 : (version < 74 ? 10 : 22);
   for (let i = 0; i < buffCount; i++) {
@@ -748,16 +788,27 @@ export function serializePlr(p: PlayerData, overrideVersion?: number, overrideMa
   }
   w.writeInt32(-1);
 
-  w.writeBoolean(p.hbLocked);
-  for (let i = 0; i < 13; i++) w.writeBoolean(p.hideInfo[i] ?? false);
-  w.writeInt32(p.anglerQuestsFinished);
-  for (let i = 0; i < 4; i++) w.writeInt32(p.dpad[i] ?? 0);
-  for (let i = 0; i < 12; i++) w.writeInt32(p.builderAcc[i] ?? 0);
-  w.writeInt32(p.bartender);
-  w.writeBoolean(p.dead);
-  if (p.dead) w.writeInt32(p.respawnTimer);
-  w.writeInt64(p.lastSaved);
-  w.writeInt32(p.golferScore);
+  if (version >= 200) w.writeBoolean(p.hbLocked);
+  if (version >= 115) {
+    for (let i = 0; i < 13; i++) w.writeBoolean(p.hideInfo[i] ?? false);
+  }
+  if (version >= 98) w.writeInt32(p.anglerQuestsFinished);
+  if (version >= 162) {
+    for (let i = 0; i < 4; i++) w.writeInt32(p.dpad[i] ?? 0);
+  }
+  const builderAccCount =
+    version >= 230 ? 12 :
+    version >= 197 ? 11 :
+    version >= 167 ? 10 :
+    version >= 164 ? 8 : 0;
+  for (let i = 0; i < builderAccCount; i++) w.writeInt32(p.builderAcc[i] ?? 0);
+  if (version >= 181) w.writeInt32(p.bartender);
+  if (version >= 200) {
+    w.writeBoolean(p.dead);
+    if (p.dead) w.writeInt32(p.respawnTimer);
+  }
+  if (version >= 202) w.writeInt64(p.lastSaved);
+  if (version >= 206) w.writeInt32(p.golferScore);
 
   if (version >= 218) {
     if (version >= 282) w.writeBoolean(!!p.crFlag);
@@ -769,11 +820,13 @@ export function serializePlr(p: PlayerData, overrideVersion?: number, overrideMa
     }
   }
 
-  w.writeUInt8(p.tempBitmask);
-  let tempWritten = 0;
-  for (let i = 0; i < 4; i++) {
-    if ((p.tempBitmask & (1 << i)) !== 0 && tempWritten < p.tempItems.length) {
-      writeItemWithStack(p.tempItems[tempWritten++], false);
+  if (version >= 214) {
+    w.writeUInt8(p.tempBitmask);
+    let tempWritten = 0;
+    for (let i = 0; i < 4; i++) {
+      if ((p.tempBitmask & (1 << i)) !== 0 && tempWritten < p.tempItems.length) {
+        writeItemWithStack(p.tempItems[tempWritten++], false);
+      }
     }
   }
 
@@ -806,8 +859,9 @@ export function serializePlr(p: PlayerData, overrideVersion?: number, overrideMa
   if (version >= 280) w.writeUInt8(p.voiceVariant);
   if (version >= 281) w.writeFloat(p.voicePitch);
   if (version >= 300) {
-    w.writeInt32(p.refunds.length);
-    for (let i = 0; i < p.refunds.length; i++) writeItemWithStack(p.refunds[i], false);
+    const validRefunds = p.refunds.filter((it) => it && it.id > 0 && it.stack > 0);
+    w.writeInt32(validRefunds.length);
+    for (let i = 0; i < validRefunds.length; i++) writeItemWithStack(validRefunds[i], false);
   }
   if (version >= 310) {
     w.writeInt32(p.dialogues.length);
@@ -1038,7 +1092,7 @@ export function createDefaultPlayer(name = "Player", version = 329): PlayerData 
     hideInfo: Array(13).fill(false),
     anglerQuestsFinished: 0,
     dpad: [-1, -1, -1, -1],
-    builderAcc: Array(12).fill(0),
+    builderAcc: [1, ...Array(11).fill(0)],
     bartender: 0,
     dead: false,
     respawnTimer: 0,
@@ -1053,7 +1107,7 @@ export function createDefaultPlayer(name = "Player", version = 329): PlayerData 
       { id: 11, type: "bool", val: false },
       { id: 14, type: "float", val: 1.0 }
     ],
-    superCart: 0,
+    superCart: 2,
 
     currentLoadoutIndex: 0,
     loadouts: Array.from({ length: 3 }, () => ({
@@ -1067,4 +1121,35 @@ export function createDefaultPlayer(name = "Player", version = 329): PlayerData 
     refunds: [],
     dialogues: []
   };
+}
+
+export function unpackTempSlots(tempBitmask: number, tempItems: ItemData[]): ItemData[] {
+  const slots: ItemData[] = [];
+  let cursor = 0;
+  for (let i = 0; i < 4; i++) {
+    if ((tempBitmask & (1 << i)) !== 0 && cursor < tempItems.length) {
+      const it = tempItems[cursor++];
+      slots.push({ id: it.id, stack: it.stack, prefix: it.prefix });
+    } else {
+      slots.push({ id: 0, stack: 0, prefix: 0 });
+    }
+  }
+  return slots;
+}
+
+export function packTempSlots(slots: ItemData[]): { tempBitmask: number; tempItems: ItemData[] } {
+  let tempBitmask = 0;
+  const tempItems: ItemData[] = [];
+  for (let i = 0; i < 4; i++) {
+    const it = slots[i];
+    if (it && it.id > 0 && it.stack > 0) {
+      tempBitmask |= 1 << i;
+      tempItems.push({
+        id: Math.max(1, Math.floor(it.id)),
+        stack: Math.max(1, Math.min(9999, Math.floor(it.stack))),
+        prefix: Math.max(0, Math.min(255, Math.floor(it.prefix || 0))),
+      });
+    }
+  }
+  return { tempBitmask, tempItems };
 }

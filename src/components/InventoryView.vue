@@ -4,6 +4,7 @@ import { store, maxStackAllInventory, maxStackCurrentBank } from '@/store';
 import ItemSlot from './ItemSlot.vue';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { getItemSpriteStyle } from '@/utils/sprite';
 
 const subTabs = [
@@ -60,11 +61,18 @@ const ammoSlots = computed(() => (store.player ? store.player.inventory.slice(54
     <div v-if="store.inventorySubTab === 'main'" class="flex flex-col gap-3">
       <!-- 快捷栏 (1-10 格) -->
       <Card class="bg-white border-[#EADFD9] shadow-sm">
-        <CardHeader class="p-3 pb-2">
+        <CardHeader class="p-3 pb-2 flex flex-row items-center justify-between">
           <CardTitle class="text-xs font-bold text-[#4A3F3D] flex items-center gap-1.5">
             <span :style="{ ...getItemSpriteStyle(3507, 14), imageRendering: 'pixelated' }"></span>
             <span>快捷栏</span>
           </CardTitle>
+          <div v-if="store.player" class="flex items-center gap-2 text-xs">
+            <span class="text-[#8E807C] font-medium">锁定快捷栏</span>
+            <Switch
+              :checked="store.player.hbLocked"
+              @update:checked="(val: boolean) => { if (store.player) { store.player.hbLocked = val; store.isModified = true; } }"
+            />
+          </div>
         </CardHeader>
         <CardContent class="p-3 pt-0">
           <div class="grid grid-cols-5 md:grid-cols-10 gap-1.5" data-slot="radix-petal-frame">
