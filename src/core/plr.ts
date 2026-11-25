@@ -70,7 +70,7 @@ export const VERSION_GROUPS: VersionGroup[] = [
     versions: [
       { version: 329, gameVersion: "1.4.6.1", highlight: true },
       { version: 329, gameVersion: "1.4.6" },
-      { version: 326, gameVersion: "1.4.5.8" },
+      { version: 326, gameVersion: "1.4.5.8", desc: "法爷归来", highlight: true },
       { version: 325, gameVersion: "1.4.5.7" },
       { version: 319, gameVersion: "1.4.5.6" },
       { version: 318, gameVersion: "1.4.5.5" },
