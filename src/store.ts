@@ -73,7 +73,23 @@ export interface DragState {
   } | null;
 }
 
+export type ActiveTool = "plr" | "pixelart" | "about";
+
+function detectInitialTool(): ActiveTool {
+  if (typeof window === "undefined") return "plr";
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("tool") === "pixelart" || window.location.hash === "#pixelart") {
+      return "pixelart";
+    }
+  } catch {
+    // ignore
+  }
+  return "plr";
+}
+
 export interface StoreState {
+  activeTool: ActiveTool;
   player: PlayerData | null;
   fileName: string;
   isModified: boolean;
@@ -107,6 +123,7 @@ export interface StoreState {
 }
 
 export const store = reactive<StoreState>({
+  activeTool: detectInitialTool(),
   player: null,
   fileName: "character.plr",
   isModified: false,
@@ -271,14 +288,16 @@ export async function initData() {
       await applyXdOverlay();
     }
 
-    // 检查首次访问弹窗提醒
-    try {
-      const dismissed = localStorage.getItem('terraria_plr_editor_dismiss_backup_warning');
-      if (!dismissed) {
+    // 检查首次访问弹窗提醒（仅角色编辑模式下自动弹出）
+    if (store.activeTool === 'plr') {
+      try {
+        const dismissed = localStorage.getItem('terraria_plr_editor_dismiss_backup_warning');
+        if (!dismissed) {
+          store.backupNoticeOpen = true;
+        }
+      } catch (e) {
         store.backupNoticeOpen = true;
       }
-    } catch (e) {
-      store.backupNoticeOpen = true;
     }
   } catch (err: any) {
     reportError(
@@ -292,6 +311,30 @@ export async function initData() {
     );
   } finally {
     store.isLoading = false;
+  }
+}
+
+export function setActiveTool(tool: ActiveTool) {
+  store.activeTool = tool;
+  if (tool === 'plr') {
+    try {
+      const dismissed = localStorage.getItem('terraria_plr_editor_dismiss_backup_warning');
+      if (!dismissed) {
+        store.backupNoticeOpen = true;
+      }
+    } catch {
+      // ignore
+    }
+  }
+  if (typeof window !== 'undefined') {
+    try {
+      const targetHash = tool === 'pixelart' ? '#pixelart' : '';
+      if (window.location.hash !== targetHash) {
+        history.replaceState(null, '', targetHash || window.location.pathname + window.location.search);
+      }
+    } catch {
+      // ignore
+    }
   }
 }
 

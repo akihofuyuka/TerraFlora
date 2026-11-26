@@ -24,7 +24,7 @@ const appVersion = __APP_VERSION__;
           </div>
 
           <p class="text-xs text-[#8E807C] max-w-md leading-relaxed">
-            纯本地运行的泰拉瑞亚角色存档编辑器，所有解析均在浏览器内完成，存档不会上传至任何服务器。
+            纯本地运行的《泰拉瑞亚》玩家工具箱，集成角色存档编辑与像素画方块/墙壁选色，所有解析与计算均在浏览器本地完成。
           </p>
         </div>
 

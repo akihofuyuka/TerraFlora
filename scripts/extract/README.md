@@ -66,6 +66,13 @@ npx tsx scripts/process-pinyin.ts
 ```
 压缩生成前端轻量化的 `public/data/items.min.json` 与 `prefixes.min.json`。
 
+### 步骤三（可选）：无头提取像素画材料库 (`materials.json`)
+无需启动游戏，直接通过 32 位 PowerShell 反射 `Terraria.exe` 提取方块/墙壁地图色、涂漆变体与可恢复过滤标签（`falling`、`solid_top`、`special`、`unsafe_wall`）：
+
+```bash
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/extract/dump-materials.ps1 -GameDir "<游戏安装目录>"
+```
+
 ### 步骤四：递增版本号
 运行 `npm version patch --no-git-tag-version` 更新 `package.json` 版本号；打包时会自动同步至页面显示版本与静态图集/数据的 `?v=` 缓存参数，确保浏览器与 Service Worker 及时拉取最新资产。
 

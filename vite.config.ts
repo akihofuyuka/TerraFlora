@@ -41,7 +41,8 @@ export default defineConfig({
         'atlas/player_hairs_alt.png',
         'atlas/accessories.png',
         'atlas/armor.png',
-        'data/dyes.json'
+        'data/dyes.json',
+        'data/materials.json'
       ],
       manifest: {
         name: 'TerraFlora',

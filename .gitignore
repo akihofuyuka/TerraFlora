@@ -30,6 +30,7 @@ src/dev/
 *.plr
 !src/core/__tests__/fixtures/*.plr
 *.bak
+*.apk
 
 # Environment variables
 .env

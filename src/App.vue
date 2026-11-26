@@ -16,6 +16,7 @@ import CharacterView from '@/components/CharacterView.vue';
 import BuffView from '@/components/BuffView.vue';
 import ResearchView from '@/components/ResearchView.vue';
 import AboutView from '@/components/AboutView.vue';
+import PixelArtView from '@/components/pixelart/PixelArtView.vue';
 import SlotEditorPanel from '@/components/SlotEditorPanel.vue';
 import BackupNoticeModal from '@/components/BackupNoticeModal.vue';
 import ErrorModal from '@/components/ErrorModal.vue';
@@ -46,7 +47,7 @@ onUnmounted(() => {
 });
 
 const isMobileDrawerOpen = computed({
-  get: () => isMobile.value && store.selectedSlot !== null && !store.isMoveMode,
+  get: () => store.activeTool === 'plr' && isMobile.value && store.selectedSlot !== null && !store.isMoveMode,
   set: (val: boolean) => {
     if (!val && isMobile.value) {
       deselectSlot();
@@ -72,8 +73,20 @@ function onFileSelected(e: Event) {
     <!-- 顶部全局导航栏 -->
     <TopBar />
 
-    <!-- 角色已载入时的功能界面 -->
-    <template v-if="store.player">
+    <!-- 像素画选色工具（KeepAlive 保留图片与画布状态） -->
+    <main v-show="store.activeTool === 'pixelart'" class="max-w-6xl w-full mx-auto p-3 md:p-6 flex-1 flex flex-col">
+      <KeepAlive>
+        <PixelArtView v-if="store.activeTool === 'pixelart'" />
+      </KeepAlive>
+    </main>
+
+    <!-- 独立关于页（未载入存档或从像素画工具点击关于时显示） -->
+    <main v-if="store.activeTool === 'about'" class="max-w-6xl w-full mx-auto p-3 md:p-6 flex-1 flex flex-col">
+      <AboutView />
+    </main>
+
+    <!-- 角色存档编辑：已载入角色时的功能界面 -->
+    <template v-if="store.activeTool === 'plr' && store.player">
       <!-- 移动待命提示横条 (手机端抽屉收起后常驻顶部，视野 100% 毫无遮挡) -->
       <transition name="fade">
         <div
@@ -135,8 +148,8 @@ function onFileSelected(e: Event) {
       </Drawer>
     </template>
 
-    <!-- 角色未载入时的迎宾引导界面 -->
-    <div v-else class="flex-1 flex items-center justify-center p-4">
+    <!-- 角色存档编辑：未载入时的迎宾引导界面 -->
+    <div v-else-if="store.activeTool === 'plr'" class="flex-1 flex items-center justify-center p-4">
       <div class="max-w-md w-full bg-white rounded-2xl border border-[#EADFD9] shadow-sm p-6 text-center flex flex-col gap-4">
         <div class="w-12 h-12 mx-auto flex items-center justify-center">
           <img src="/logo.png" alt="Logo" class="w-12 h-12 object-contain drop-shadow-xs" />

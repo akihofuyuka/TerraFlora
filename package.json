@@ -1,7 +1,7 @@
 {
   "name": "terraflora",
   "private": true,
-  "version": "1.0.3",
+  "version": "1.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,7 +9,8 @@
     "test": "vitest run",
     "preview": "vite preview",
     "extract:build": "node scripts/extract/build-from-dump.mjs",
-    "extract:dump": "echo \"用法: dotnet run --project tools/gamedump -- textures <游戏安装路径> dump\""
+    "extract:dump": "echo \"用法: dotnet run --project tools/gamedump -- textures <游戏安装路径> dump\"",
+    "extract:materials": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/extract/dump-materials.ps1"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.11",
