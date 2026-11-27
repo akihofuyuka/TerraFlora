@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { Ban, Copy, Download, PackagePlus } from 'lucide-vue-next';
+import { Ban, Copy, Download, PackagePlus, Plus, Sparkles, Star, X } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -9,9 +9,12 @@ import { getItemSpriteStyle } from '@/utils/sprite';
 import {
   exportBlueprintPng,
   materialKey,
+  normalizeKeyList,
+  toggleKeyInList,
   type BatchConvertResult,
   type BomEntry,
   type MatchOptions,
+  type MaterialsRepository,
   type TagCounts,
 } from '@/core/pixelArt';
 import PixelArtFilterBar from './PixelArtFilterBar.vue';
@@ -20,6 +23,7 @@ const props = defineProps<{
   result: BatchConvertResult;
   previewCanvas: HTMLCanvasElement | null;
   options: MatchOptions;
+  repository: MaterialsRepository;
   tagCounts: TagCounts;
   dithering: boolean;
   skipTransparent: boolean;
@@ -90,16 +94,45 @@ function formatStacks(count: number, itemId: number): string {
   return rem > 0 ? `${count} 个（${stacks}组 + ${rem}）` : `${count} 个（${stacks}组）`;
 }
 
+const includedSet = computed(() => new Set(normalizeKeyList(props.options.includedMaterialKeys)));
+
 function excludeBomMaterial(entry: BomEntry) {
   const key = materialKey(entry.material);
-  const prev = props.options.excludedMaterialKeys;
-  const next = new Set(prev ? (prev instanceof Set ? Array.from(prev) : prev) : []);
-  next.add(key);
+  const { next } = toggleKeyInList(props.options.excludedMaterialKeys, key);
   emit('update:options', {
     ...props.options,
-    excludedMaterialKeys: Array.from(next),
+    excludedMaterialKeys: next,
   });
   showToast(`已屏蔽 ${entry.material.name} 并重新计算整图`);
+}
+
+function toggleIncludeBom(entry: BomEntry) {
+  const key = materialKey(entry.material);
+  const { next, added } = toggleKeyInList(props.options.includedMaterialKeys, key);
+  emit('update:options', {
+    ...props.options,
+    includedMaterialKeys: next,
+  });
+  showToast(
+    added
+      ? `已将 ${entry.material.name} 加入自选清单（共 ${next.length} 项）`
+      : `已将 ${entry.material.name} 移出自选清单`
+  );
+}
+
+function focusTopBomAsInclude() {
+  const keys = new Set<string>();
+  for (const entry of props.result.bom) {
+    keys.add(materialKey(entry.material));
+    if (keys.size >= 12) break;
+  }
+  const next = Array.from(keys);
+  emit('update:options', {
+    ...props.options,
+    filterMode: 'include',
+    includedMaterialKeys: next,
+  });
+  showToast(`已将用量前 ${next.length} 种材料设为自选清单并重算整图`);
 }
 
 async function copyBomText() {
@@ -138,7 +171,7 @@ async function downloadBlueprint() {
   if (!props.previewCanvas || exportingBlueprint.value) return;
   exportingBlueprint.value = true;
   try {
-    const blob = await exportBlueprintPng(props.previewCanvas, 12);
+    const blob = await exportBlueprintPng(props.previewCanvas);
     triggerDownload(blob, `terraflora-blueprint-${props.result.columns}x${props.result.rows}.png`);
     showToast('已导出带坐标标尺的施工图纸');
   } catch {
@@ -270,6 +303,7 @@ function grantMaterialsToPlayer() {
         <PixelArtFilterBar
           :options="options"
           :tag-counts="tagCounts"
+          :repository="repository"
           @update:options="emit('update:options', $event)"
         />
 
@@ -358,16 +392,42 @@ function grantMaterialsToPlayer() {
     <!-- 方块/墙壁材料统计清单 -->
     <Card class="border-[#EADFD9]">
       <CardContent class="p-3.5 sm:p-4 flex flex-col gap-2.5">
-        <div class="flex items-center justify-between">
+        <div class="flex items-center justify-between gap-2 flex-wrap">
           <h3 class="text-xs sm:text-sm font-bold text-[#4A3F3D]">材料采购清单</h3>
-          <span class="text-[11px] text-[#8E807C]">按用量从多到少排序（点击可屏蔽重算）</span>
+          <div class="flex items-center gap-2 flex-wrap">
+            <button
+              v-if="(options.filterMode ?? 'exclude') === 'exclude' && result.bom.length > 12"
+              type="button"
+              class="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-lg bg-[#FFF7F2] border border-[#739CBF]/45 text-[#2F658D] font-semibold hover:bg-[#739CBF]/10 cursor-pointer"
+              title="提取当前用量最高的 12 种主要材料，切换为只用自选模式重算整图"
+              @click="focusTopBomAsInclude"
+            >
+              <Sparkles class="w-3 h-3" />
+              <span>提取前12种入自选重算</span>
+            </button>
+            <span class="text-[11px] text-[#8E807C]">按用量排序（支持加自选或屏蔽）</span>
+          </div>
         </div>
 
         <div
           v-if="result.bom.length === 0"
-          class="bg-[#FFF7F2] border border-[#EADFD9] rounded-xl py-8 text-center text-xs text-[#8E807C]"
+          class="bg-[#FFF7F2] border border-[#EADFD9] rounded-xl py-8 px-4 text-center text-xs text-[#8E807C] flex flex-col items-center gap-2"
         >
-          无可用材料输出
+          <span>
+            {{
+              (options.filterMode ?? 'exclude') === 'include' && includedSet.size === 0
+                ? '当前处于「只用自选」模式但清单为空，请先点击「管理清单 / 导入导出」添加材料。'
+                : '当前筛选条件下无可用材料输出。'
+            }}
+          </span>
+          <button
+            v-if="(options.filterMode ?? 'exclude') === 'include'"
+            type="button"
+            class="text-[11px] px-2.5 py-1 rounded-lg bg-white border border-[#EADFD9] text-[#4A3F3D] font-semibold hover:bg-[#F9D6DB]/40 cursor-pointer"
+            @click="emit('update:options', { ...options, filterMode: 'exclude' })"
+          >
+            切回全库排除
+          </button>
         </div>
 
         <div
@@ -421,13 +481,43 @@ function grantMaterialsToPlayer() {
             </div>
 
             <button
+              v-if="(options.filterMode ?? 'exclude') === 'include'"
               type="button"
               class="p-1.5 rounded-lg text-[#8E807C] hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer shrink-0"
-              title="屏蔽此材料并重新生成整图"
-              @click="excludeBomMaterial(b)"
+              title="从自选清单移出并重算整图"
+              @click="toggleIncludeBom(b)"
             >
-              <Ban class="w-3.5 h-3.5" />
+              <X class="w-3.5 h-3.5" />
             </button>
+
+            <template v-else>
+              <button
+                type="button"
+                :class="[
+                  'p-1.5 rounded-lg transition-colors cursor-pointer shrink-0',
+                  includedSet.has(materialKey(b.material))
+                    ? 'bg-[#739CBF]/15 text-[#739CBF] hover:bg-rose-50 hover:text-rose-600'
+                    : 'text-[#8E807C] hover:text-[#2F658D] hover:bg-[#739CBF]/10'
+                ]"
+                :title="includedSet.has(materialKey(b.material)) ? '已在自选清单（点击取消）' : '加入自选清单'"
+                @click="toggleIncludeBom(b)"
+              >
+                <Star
+                  v-if="includedSet.has(materialKey(b.material))"
+                  class="w-3.5 h-3.5 fill-current"
+                />
+                <Plus v-else class="w-3.5 h-3.5" />
+              </button>
+
+              <button
+                type="button"
+                class="p-1.5 rounded-lg text-[#8E807C] hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer shrink-0"
+                title="屏蔽此材料并重新生成整图"
+                @click="excludeBomMaterial(b)"
+              >
+                <Ban class="w-3.5 h-3.5" />
+              </button>
+            </template>
           </div>
         </div>
       </CardContent>

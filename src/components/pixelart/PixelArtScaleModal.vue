@@ -1,52 +1,57 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { getItemSpriteStyle } from '@/utils/sprite';
 import {
-  MAX_CANVAS_HEIGHT,
-  MAX_CANVAS_WIDTH,
-  TILE_SIZE,
-  clampCanvasSize,
-  defaultScaleSize,
-  keepRatioDim,
-  maxFitSize,
-  pixelPerTileSize,
-  resolveTargetSize,
+  MAX_BATCH_CELLS,
+  MAX_TILES_HEIGHT,
+  MAX_TILES_WIDTH,
+  buildImagePlan,
+  clampGridSize,
+  defaultGridSize,
+  fitLongSideGridSize,
+  keepRatioGridDim,
+  resolveGridSize,
+  type SampleStyle,
   type ScaleMode,
 } from '@/core/pixelArt';
 
 const props = defineProps<{
   open: boolean;
+  sourceCanvas: HTMLCanvasElement;
   sourceWidth: number;
   sourceHeight: number;
   initialMode?: ScaleMode;
-  initialWidth?: number;
-  initialHeight?: number;
+  initialSampleStyle?: SampleStyle;
+  initialColumns?: number;
+  initialRows?: number;
 }>();
 
 const emit = defineEmits<{
   (e: 'close'): void;
-  (e: 'confirm', payload: { mode: ScaleMode; width: number; height: number }): void;
+  (
+    e: 'confirm',
+    payload: { mode: ScaleMode; sampleStyle: SampleStyle; columns: number; rows: number }
+  ): void;
 }>();
 
 const mode = ref<ScaleMode>('keep_ratio');
-const inputUnit = ref<'tiles' | 'pixels'>('tiles');
-const widthText = ref('');
-const heightText = ref('');
+const sampleStyle = ref<SampleStyle>('smooth');
+const colsText = ref('');
+const rowsText = ref('');
 
-const defaultSize = computed(() => defaultScaleSize(props.sourceWidth, props.sourceHeight));
-const maxTilesCols = Math.floor(MAX_CANVAS_WIDTH / TILE_SIZE);
-const maxTilesRows = Math.floor(MAX_CANVAS_HEIGHT / TILE_SIZE);
+const defaultSize = computed(() => defaultGridSize(props.sourceWidth, props.sourceHeight));
 
 watch(
   () => props.open,
   (isOpen) => {
     if (!isOpen) return;
-    const [defW, defH] = defaultSize.value;
+    const [defCols, defRows] = defaultSize.value;
     mode.value = props.initialMode ?? 'keep_ratio';
-    widthText.value = String(props.initialWidth ?? defW);
-    heightText.value = String(props.initialHeight ?? defH);
+    sampleStyle.value = props.initialSampleStyle ?? 'smooth';
+    colsText.value = String(props.initialColumns ?? defCols);
+    rowsText.value = String(props.initialRows ?? defRows);
   },
   { immediate: true }
 );
@@ -61,30 +66,17 @@ function digitsOnly(val: string | number): string {
 }
 
 const resolvedTarget = computed(() => {
-  const [defW, defH] = defaultSize.value;
-  return resolveTargetSize(
+  const [defCols, defRows] = defaultSize.value;
+  return resolveGridSize(
     props.sourceWidth,
     props.sourceHeight,
     mode.value,
-    parseDim(widthText.value, defW),
-    parseDim(heightText.value, defH)
+    parseDim(colsText.value, defCols),
+    parseDim(rowsText.value, defRows)
   );
 });
 
-const tileCols = computed(() => Math.ceil(resolvedTarget.value[0] / TILE_SIZE));
-const tileRows = computed(() => Math.ceil(resolvedTarget.value[1] / TILE_SIZE));
-
-const displayWidthValue = computed(() =>
-  inputUnit.value === 'tiles'
-    ? String(Math.max(1, Math.round(parseDim(widthText.value, defaultSize.value[0]) / TILE_SIZE)))
-    : widthText.value
-);
-
-const displayHeightValue = computed(() =>
-  inputUnit.value === 'tiles'
-    ? String(Math.max(1, Math.round(parseDim(heightText.value, defaultSize.value[1]) / TILE_SIZE)))
-    : heightText.value
-);
+const totalCells = computed(() => resolvedTarget.value[0] * resolvedTarget.value[1]);
 
 const scaleModes: Array<{ value: ScaleMode; label: string; desc: string }> = [
   { value: 'keep_ratio', label: '按原比例', desc: '锁定宽高比' },
@@ -95,62 +87,62 @@ const scaleModes: Array<{ value: ScaleMode; label: string; desc: string }> = [
 function selectMode(nextMode: ScaleMode) {
   mode.value = nextMode;
   if (nextMode === 'keep_ratio') {
-    const reqW = parseDim(widthText.value, defaultSize.value[0]);
-    const h = clampCanvasSize(
-      keepRatioDim(props.sourceWidth, props.sourceHeight, reqW, 0),
-      MAX_CANVAS_HEIGHT
+    const reqCols = parseDim(colsText.value, defaultSize.value[0]);
+    const r = clampGridSize(
+      keepRatioGridDim(props.sourceWidth, props.sourceHeight, reqCols, 0),
+      MAX_TILES_HEIGHT
     );
-    heightText.value = String(h);
+    rowsText.value = String(r);
   }
 }
 
-function onWidthInput(val: string | number) {
+function onColsInput(val: string | number) {
   const clean = digitsOnly(val);
-  const pxVal = inputUnit.value === 'tiles'
-    ? String(Math.max(1, parseDim(clean, 1)) * TILE_SIZE)
-    : clean;
-  widthText.value = pxVal;
+  colsText.value = clean;
   if (mode.value === 'keep_ratio') {
-    const w = parseDim(pxVal, defaultSize.value[0]);
-    const h = clampCanvasSize(
-      keepRatioDim(props.sourceWidth, props.sourceHeight, w, 0),
-      MAX_CANVAS_HEIGHT
+    const c = parseDim(clean, defaultSize.value[0]);
+    const r = clampGridSize(
+      keepRatioGridDim(props.sourceWidth, props.sourceHeight, c, 0),
+      MAX_TILES_HEIGHT
     );
-    heightText.value = String(h);
+    rowsText.value = String(r);
   }
 }
 
-function onHeightInput(val: string | number) {
+function onRowsInput(val: string | number) {
   const clean = digitsOnly(val);
-  const pxVal = inputUnit.value === 'tiles'
-    ? String(Math.max(1, parseDim(clean, 1)) * TILE_SIZE)
-    : clean;
-  heightText.value = pxVal;
+  rowsText.value = clean;
   if (mode.value === 'keep_ratio') {
-    const h = parseDim(pxVal, defaultSize.value[1]);
-    const w = clampCanvasSize(
-      keepRatioDim(props.sourceWidth, props.sourceHeight, 0, h),
-      MAX_CANVAS_WIDTH
+    const r = parseDim(clean, defaultSize.value[1]);
+    const c = clampGridSize(
+      keepRatioGridDim(props.sourceWidth, props.sourceHeight, 0, r),
+      MAX_TILES_WIDTH
     );
-    widthText.value = String(w);
+    colsText.value = String(c);
   }
 }
 
-function applyPresetPixelPerTile() {
-  const [w, h] = pixelPerTileSize(props.sourceWidth, props.sourceHeight);
-  widthText.value = String(w);
-  heightText.value = String(h);
+function applyLongSidePreset(maxSide: number) {
+  const [c, r] = fitLongSideGridSize(props.sourceWidth, props.sourceHeight, maxSide);
+  colsText.value = String(c);
+  rowsText.value = String(r);
 }
 
-function applyPresetMaxFit() {
-  const [w, h] = maxFitSize(props.sourceWidth, props.sourceHeight);
-  widthText.value = String(w);
-  heightText.value = String(h);
+function applyOriginalPreset() {
+  const [c, r] = resolveGridSize(
+    props.sourceWidth,
+    props.sourceHeight,
+    mode.value === 'manual' ? 'manual' : 'keep_ratio',
+    props.sourceWidth,
+    props.sourceHeight
+  );
+  colsText.value = String(c);
+  rowsText.value = String(r);
 }
 
 function handleConfirm() {
-  const [width, height] = resolvedTarget.value;
-  emit('confirm', { mode: mode.value, width, height });
+  const [columns, rows] = resolvedTarget.value;
+  emit('confirm', { mode: mode.value, sampleStyle: sampleStyle.value, columns, rows });
 }
 </script>
 
@@ -165,16 +157,15 @@ function handleConfirm() {
         <div
           class="bg-white rounded-2xl border border-[#EADFD9] shadow-2xl max-w-md w-full p-5 flex flex-col gap-4 text-[#4A3F3D]"
         >
-          <!-- 标题 -->
           <div class="flex items-center justify-between pb-2 border-b border-[#EADFD9]">
             <div class="flex items-center gap-2.5">
               <div class="w-8 h-8 rounded-lg bg-[#FFF7F2] flex items-center justify-center shrink-0 border border-[#EADFD9]">
                 <span :style="{ ...getItemSpriteStyle(149, 18), imageRendering: 'pixelated' }"></span>
               </div>
               <div>
-                <h3 class="text-sm font-bold text-[#4A3F3D]">画布与图格尺寸</h3>
+                <h3 class="text-sm font-bold text-[#4A3F3D]">图格尺寸设置</h3>
                 <p class="text-[11px] text-[#8E807C]">
-                  原图尺寸：{{ sourceWidth }} × {{ sourceHeight }} px
+                  原图：{{ sourceWidth }} × {{ sourceHeight }} px
                 </p>
               </div>
             </div>
@@ -187,7 +178,38 @@ function handleConfirm() {
             </button>
           </div>
 
-          <!-- 缩放模式 -->
+          <div class="flex flex-col gap-1.5">
+            <span class="text-xs font-semibold text-[#4A3F3D]">采样方式</span>
+            <div class="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                :class="[
+                  'p-2 rounded-xl border text-left transition-all cursor-pointer',
+                  sampleStyle === 'smooth'
+                    ? 'bg-[#739CBF]/10 border-[#739CBF] text-[#4A3F3D] shadow-2xs'
+                    : 'bg-[#FFF7F2] border-[#EADFD9] text-[#8E807C] hover:text-[#4A3F3D]'
+                ]"
+                @click="sampleStyle = 'smooth'"
+              >
+                <div class="text-xs font-bold text-[#4A3F3D]">平滑缩放</div>
+                <div class="text-[10px] text-[#8E807C] mt-0.5">适合照片、插画与截图</div>
+              </button>
+              <button
+                type="button"
+                :class="[
+                  'p-2 rounded-xl border text-left transition-all cursor-pointer',
+                  sampleStyle === 'pixel_snap'
+                    ? 'bg-[#739CBF]/10 border-[#739CBF] text-[#4A3F3D] shadow-2xs'
+                    : 'bg-[#FFF7F2] border-[#EADFD9] text-[#8E807C] hover:text-[#4A3F3D]'
+                ]"
+                @click="sampleStyle = 'pixel_snap'"
+              >
+                <div class="text-xs font-bold text-[#4A3F3D]">中心去噪取色</div>
+                <div class="text-[10px] text-[#8E807C] mt-0.5">避开细线与边缘模糊</div>
+              </button>
+            </div>
+          </div>
+
           <div class="flex flex-col gap-1.5">
             <span class="text-xs font-semibold text-[#4A3F3D]">缩放模式</span>
             <div class="grid grid-cols-3 gap-1.5">
@@ -209,94 +231,65 @@ function handleConfirm() {
             </div>
           </div>
 
-          <!-- 输入单位切换 + 数值输入 -->
-          <div class="flex flex-col gap-2">
-            <div class="flex items-center justify-between">
-              <span class="text-xs font-semibold text-[#4A3F3D]">目标尺寸</span>
-              <div class="flex items-center bg-[#FFF7F2] border border-[#EADFD9] rounded-lg p-0.5 text-[11px]">
-                <button
-                  type="button"
-                  :class="[
-                    'px-2 py-0.5 rounded-md font-semibold cursor-pointer',
-                    inputUnit === 'tiles' ? 'bg-[#739CBF] text-white' : 'text-[#8E807C]'
-                  ]"
-                  @click="inputUnit = 'tiles'"
-                >
-                  按图格数
-                </button>
-                <button
-                  type="button"
-                  :class="[
-                    'px-2 py-0.5 rounded-md font-semibold cursor-pointer',
-                    inputUnit === 'pixels' ? 'bg-[#739CBF] text-white' : 'text-[#8E807C]'
-                  ]"
-                  @click="inputUnit = 'pixels'"
-                >
-                  按画布像素
-                </button>
-              </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="flex flex-col gap-1">
+              <label class="text-[11px] font-semibold text-[#8E807C]">
+                宽度 (格，上限 {{ MAX_TILES_WIDTH }})
+              </label>
+              <Input
+                :model-value="colsText"
+                type="text"
+                inputmode="numeric"
+                class="bg-[#FFF7F2] border-[#EADFD9] font-mono text-sm h-9"
+                @update:model-value="onColsInput"
+              />
             </div>
-
-            <div class="grid grid-cols-2 gap-3">
-              <div class="flex flex-col gap-1">
-                <label class="text-[11px] font-semibold text-[#8E807C]">
-                  {{ inputUnit === 'tiles' ? `宽度 (图格，上限 ${maxTilesCols})` : `宽度 (px，上限 ${MAX_CANVAS_WIDTH})` }}
-                </label>
-                <Input
-                  :model-value="displayWidthValue"
-                  type="text"
-                  inputmode="numeric"
-                  class="bg-[#FFF7F2] border-[#EADFD9] font-mono text-sm h-9"
-                  @update:model-value="onWidthInput"
-                />
-              </div>
-              <div class="flex flex-col gap-1">
-                <label class="text-[11px] font-semibold text-[#8E807C]">
-                  {{ inputUnit === 'tiles' ? `高度 (图格，上限 ${maxTilesRows})` : `高度 (px，上限 ${MAX_CANVAS_HEIGHT})` }}
-                </label>
-                <Input
-                  :model-value="displayHeightValue"
-                  type="text"
-                  inputmode="numeric"
-                  class="bg-[#FFF7F2] border-[#EADFD9] font-mono text-sm h-9"
-                  @update:model-value="onHeightInput"
-                />
-              </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-[11px] font-semibold text-[#8E807C]">
+                高度 (格，上限 {{ MAX_TILES_HEIGHT }})
+              </label>
+              <Input
+                :model-value="rowsText"
+                type="text"
+                inputmode="numeric"
+                class="bg-[#FFF7F2] border-[#EADFD9] font-mono text-sm h-9"
+                @update:model-value="onRowsInput"
+              />
             </div>
           </div>
 
-          <!-- 快捷尺寸与结果摘要 -->
           <div class="bg-[#FFF7F2] border border-[#EADFD9] rounded-xl p-3 flex flex-col gap-2 text-xs">
             <div class="flex items-center justify-between gap-2 flex-wrap">
               <span class="text-[#739CBF] font-bold">
-                {{ tileCols }} × {{ tileRows }} 图格（共 {{ (tileCols * tileRows).toLocaleString() }} 格）
+                {{ resolvedTarget[0] }} × {{ resolvedTarget[1] }} 格（共 {{ totalCells.toLocaleString() }} 块）
               </span>
-              <span class="font-mono text-[#8E807C]">
-                {{ resolvedTarget[0] }}×{{ resolvedTarget[1] }} px
+              <span class="text-[11px] text-[#8E807C]">
+                大世界上限 {{ MAX_TILES_WIDTH }}×{{ MAX_TILES_HEIGHT }}
               </span>
             </div>
-            <p class="text-[11px] text-[#8E807C]">
-              1 图格 = 16×16 px，上限 {{ maxTilesCols }}×{{ maxTilesRows }} 格。
+            <p v-if="totalCells > MAX_BATCH_CELLS" class="text-[11px] text-amber-700 font-medium">
+              当前超过 {{ (MAX_BATCH_CELLS / 10000).toFixed(0) }} 万格，仅支持缩放点格选色（全图批量转换需 ≤ {{ (MAX_BATCH_CELLS / 10000).toFixed(0) }} 万格）。
             </p>
-            <div class="flex items-center gap-2 pt-0.5 flex-wrap">
+            <div class="flex items-center gap-1.5 pt-0.5 flex-wrap">
               <button
                 type="button"
-                class="text-[11px] px-2.5 py-1 rounded-lg bg-white border border-[#739CBF]/40 text-[#739CBF] font-semibold hover:bg-[#739CBF]/10 cursor-pointer"
-                @click="applyPresetPixelPerTile"
+                class="text-[11px] px-2 py-1 rounded-lg bg-white border border-[#739CBF]/40 text-[#739CBF] font-semibold hover:bg-[#739CBF]/10 cursor-pointer"
+                @click="applyOriginalPreset"
               >
-                1 像素 = 1 图格
+                原图 1:1
               </button>
               <button
+                v-for="preset in [64, 128, 256, 512]"
+                :key="preset"
                 type="button"
-                class="text-[11px] px-2.5 py-1 rounded-lg bg-white border border-[#EADFD9] text-[#4A3F3D] font-semibold hover:bg-[#F9D6DB]/40 cursor-pointer"
-                @click="applyPresetMaxFit"
+                class="text-[11px] px-2 py-1 rounded-lg bg-white border border-[#EADFD9] text-[#4A3F3D] font-semibold hover:bg-[#F9D6DB]/40 cursor-pointer"
+                @click="applyLongSidePreset(preset)"
               >
-                铺满上限
+                {{ preset }} 格
               </button>
             </div>
           </div>
 
-          <!-- 底部操作 -->
           <div class="flex items-center justify-end gap-2 pt-1">
             <Button
               variant="outline"
@@ -312,7 +305,7 @@ function handleConfirm() {
               class="h-8 text-xs font-bold bg-[#739CBF] hover:bg-[#5f87a8] text-white px-4"
               @click="handleConfirm"
             >
-              确认生成图格
+              确认生成
             </Button>
           </div>
         </div>

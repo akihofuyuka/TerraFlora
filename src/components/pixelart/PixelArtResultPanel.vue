@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { Ban, Copy } from 'lucide-vue-next';
+import { Ban, Copy, Plus, Star, X } from 'lucide-vue-next';
 import { showToast } from '@/store';
 import { getItemSpriteStyle } from '@/utils/sprite';
 import {
   PixelArtMatcher,
   materialKey,
+  normalizeKeyList,
   parseHexColor,
+  toggleKeyInList,
   type MatchCandidate,
   type MatchOptions,
   type MaterialTag,
@@ -62,16 +64,30 @@ function formatCandidateCopy(c: MatchCandidate): string {
   return `${c.material.name} (物品ID ${c.material.itemId}-${c.paintName}-#${c.hex})`;
 }
 
+const includedSet = computed(() => new Set(normalizeKeyList(props.options.includedMaterialKeys)));
+
 function excludeCandidate(c: MatchCandidate) {
   const key = materialKey(c.material);
-  const prev = props.options.excludedMaterialKeys;
-  const next = new Set(prev ? (prev instanceof Set ? Array.from(prev) : prev) : []);
-  next.add(key);
+  const { next, added } = toggleKeyInList(props.options.excludedMaterialKeys, key);
   emit('update:options', {
     ...props.options,
-    excludedMaterialKeys: Array.from(next),
+    excludedMaterialKeys: next,
   });
-  showToast(`已屏蔽 ${c.material.name}`);
+  showToast(added ? `已屏蔽 ${c.material.name}` : `已取消屏蔽 ${c.material.name}`);
+}
+
+function toggleIncludeCandidate(c: MatchCandidate) {
+  const key = materialKey(c.material);
+  const { next, added } = toggleKeyInList(props.options.includedMaterialKeys, key);
+  emit('update:options', {
+    ...props.options,
+    includedMaterialKeys: next,
+  });
+  showToast(
+    added
+      ? `已将 ${c.material.name} 加入自选清单（共 ${next.length} 项）`
+      : `已将 ${c.material.name} 移出自选清单`
+  );
 }
 </script>
 
@@ -120,6 +136,7 @@ function excludeCandidate(c: MatchCandidate) {
     <PixelArtFilterBar
       :options="options"
       :tag-counts="tagCounts ?? matcher.repository.tagCounts"
+      :repository="matcher.repository"
       @update:options="emit('update:options', $event)"
     />
 
@@ -133,9 +150,23 @@ function excludeCandidate(c: MatchCandidate) {
 
     <div
       v-else-if="candidates.length === 0"
-      class="bg-[#FFF7F2] border border-[#EADFD9] rounded-xl py-10 px-4 text-center text-xs text-[#8E807C]"
+      class="bg-[#FFF7F2] border border-[#EADFD9] rounded-xl py-10 px-4 text-center text-xs text-[#8E807C] flex flex-col items-center gap-2"
     >
-      当前筛选条件下无匹配结果，可尝试放开筛选条件或重置屏蔽列表。
+      <span>
+        {{
+          (options.filterMode ?? 'exclude') === 'include' && includedSet.size === 0
+            ? '自选清单为空，请点击上方「管理清单 / 导入导出」添加材料，或切回「全库排除」。'
+            : '当前筛选条件下无匹配结果，可尝试放开筛选条件或切换筛选模式。'
+        }}
+      </span>
+      <button
+        v-if="(options.filterMode ?? 'exclude') === 'include'"
+        type="button"
+        class="text-[11px] px-2.5 py-1 rounded-lg bg-white border border-[#EADFD9] text-[#4A3F3D] font-semibold hover:bg-[#F9D6DB]/40 cursor-pointer"
+        @click="emit('update:options', { ...options, filterMode: 'exclude' })"
+      >
+        切回全库排除
+      </button>
     </div>
 
     <div
@@ -209,9 +240,9 @@ function excludeCandidate(c: MatchCandidate) {
           </div>
         </div>
 
-        <!-- 相似度 + 屏蔽按钮 -->
-        <div class="flex items-center gap-1.5 shrink-0 pl-1">
-          <div class="text-right">
+        <!-- 相似度 + 加入自选 / 屏蔽按钮 -->
+        <div class="flex items-center gap-1 shrink-0 pl-1">
+          <div class="text-right mr-0.5">
             <div
               :class="[
                 'text-xs sm:text-sm font-bold font-mono tabular-nums',
@@ -226,13 +257,43 @@ function excludeCandidate(c: MatchCandidate) {
           </div>
 
           <button
+            v-if="(options.filterMode ?? 'exclude') === 'include'"
             type="button"
             class="p-1.5 rounded-lg text-[#8E807C] hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-            title="屏蔽此材料（下次匹配跳过）"
-            @click.stop="excludeCandidate(c)"
+            title="从自选清单移出"
+            @click.stop="toggleIncludeCandidate(c)"
           >
-            <Ban class="w-3.5 h-3.5" />
+            <X class="w-3.5 h-3.5" />
           </button>
+
+          <template v-else>
+            <button
+              type="button"
+              :class="[
+                'p-1.5 rounded-lg transition-colors cursor-pointer',
+                includedSet.has(materialKey(c.material))
+                  ? 'bg-[#739CBF]/15 text-[#739CBF] hover:bg-rose-50 hover:text-rose-600'
+                  : 'text-[#8E807C] hover:text-[#2F658D] hover:bg-[#739CBF]/10'
+              ]"
+              :title="includedSet.has(materialKey(c.material)) ? '已在自选清单（点击取消）' : '加入自选清单'"
+              @click.stop="toggleIncludeCandidate(c)"
+            >
+              <Star
+                v-if="includedSet.has(materialKey(c.material))"
+                class="w-3.5 h-3.5 fill-current"
+              />
+              <Plus v-else class="w-3.5 h-3.5" />
+            </button>
+
+            <button
+              type="button"
+              class="p-1.5 rounded-lg text-[#8E807C] hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+              title="屏蔽此材料（下次匹配跳过）"
+              @click.stop="excludeCandidate(c)"
+            >
+              <Ban class="w-3.5 h-3.5" />
+            </button>
+          </template>
         </div>
       </div>
     </div>

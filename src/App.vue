@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, computed } from 'vue';
+import { defineAsyncComponent, onMounted, onUnmounted, ref, computed } from 'vue';
 import {
   store,
   initData,
@@ -15,11 +15,12 @@ import EquipmentView from '@/components/EquipmentView.vue';
 import CharacterView from '@/components/CharacterView.vue';
 import BuffView from '@/components/BuffView.vue';
 import ResearchView from '@/components/ResearchView.vue';
-import AboutView from '@/components/AboutView.vue';
-import PixelArtView from '@/components/pixelart/PixelArtView.vue';
 import SlotEditorPanel from '@/components/SlotEditorPanel.vue';
 import BackupNoticeModal from '@/components/BackupNoticeModal.vue';
 import ErrorModal from '@/components/ErrorModal.vue';
+
+const AboutView = defineAsyncComponent(() => import('@/components/AboutView.vue'));
+const PixelArtView = defineAsyncComponent(() => import('@/components/pixelart/PixelArtView.vue'));
 import {
   Drawer,
   DrawerContent,

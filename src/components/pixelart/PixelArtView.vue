@@ -28,26 +28,27 @@ import { showToast } from '@/store';
 import { getItemSpriteStyle } from '@/utils/sprite';
 import {
   DEFAULT_TOP_N,
+  MAX_BATCH_CELLS,
   MaterialsRepository,
   PixelArtMatcher,
-  TILE_SIZE,
   batchConvertRgba,
   buildBatchPreviewCanvas,
   buildImagePlan,
   clampViewport,
-  dominantHexFromRgba,
   fitViewport,
   letterbox,
   loadSampledImageCanvas,
   parseHexColor,
-  sourceRectOf,
+  sampleCellHexFromRgba,
   transformViewport,
   type BatchConvertResult,
   type CellPick,
+  type FilterMode,
   type ImagePlan,
   type MatchCandidate,
   type MatchOptions,
   type RawMaterialsDatabase,
+  type SampleStyle,
   type ScaleMode,
   type Viewport,
 } from '@/core/pixelArt';
@@ -61,6 +62,8 @@ type PanelTool = 'move' | 'pick';
 
 const RECENT_COLORS_KEY = 'terraflora_pixelart_recent_colors';
 const EXCLUDED_MATERIALS_KEY = 'terraflora_pixelart_excluded_materials';
+const INCLUDED_MATERIALS_KEY = 'terraflora_pixelart_included_materials';
+const FILTER_MODE_KEY = 'terraflora_pixelart_filter_mode';
 
 /* ==================== 材料库加载 ==================== */
 const repository = shallowRef<MaterialsRepository | null>(null);
@@ -89,23 +92,21 @@ async function loadMaterials() {
   }
 }
 
-function loadSavedExcluded(): string[] {
+function loadSavedStringArray(storageKey: string): string[] {
   try {
-    const raw = localStorage.getItem(EXCLUDED_MATERIALS_KEY);
+    const raw = localStorage.getItem(storageKey);
     const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed) ? parsed.filter((v) => typeof v === 'string') : [];
   } catch {
     return [];
   }
 }
 
-function loadSavedRecentColors(): string[] {
+function loadSavedFilterMode(): FilterMode {
   try {
-    const raw = localStorage.getItem(RECENT_COLORS_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed.filter((c) => typeof c === 'string') : [];
+    return localStorage.getItem(FILTER_MODE_KEY) === 'include' ? 'include' : 'exclude';
   } catch {
-    return [];
+    return 'exclude';
   }
 }
 
@@ -120,15 +121,24 @@ const matchOptions = ref<MatchOptions>({
   includeSolidTop: false,
   includeUnsafeWalls: false,
   includeSpecial: false,
-  excludedMaterialKeys: loadSavedExcluded(),
+  filterMode: loadSavedFilterMode(),
+  excludedMaterialKeys: loadSavedStringArray(EXCLUDED_MATERIALS_KEY),
+  includedMaterialKeys: loadSavedStringArray(INCLUDED_MATERIALS_KEY),
 });
 
 watch(
-  () => matchOptions.value.excludedMaterialKeys,
-  (val) => {
+  () => [
+    matchOptions.value.filterMode,
+    matchOptions.value.excludedMaterialKeys,
+    matchOptions.value.includedMaterialKeys,
+  ],
+  ([fMode, excluded, included]) => {
     try {
-      const arr = val instanceof Set ? Array.from(val) : (val ?? []);
-      localStorage.setItem(EXCLUDED_MATERIALS_KEY, JSON.stringify(arr));
+      localStorage.setItem(FILTER_MODE_KEY, fMode === 'include' ? 'include' : 'exclude');
+      const exArr = excluded instanceof Set ? Array.from(excluded) : (excluded ?? []);
+      const inArr = included instanceof Set ? Array.from(included) : (included ?? []);
+      localStorage.setItem(EXCLUDED_MATERIALS_KEY, JSON.stringify(exArr));
+      localStorage.setItem(INCLUDED_MATERIALS_KEY, JSON.stringify(inArr));
     } catch {
       // ignore
     }
@@ -140,7 +150,7 @@ watch(
 const colorInput = ref('#4A90E2');
 const matchedHex = ref('4A90E2');
 const colorError = ref<string | null>(null);
-const recentColors = ref<string[]>(loadSavedRecentColors());
+const recentColors = ref<string[]>(loadSavedStringArray(RECENT_COLORS_KEY));
 
 const colorPresets = [
   '4A90E2',
@@ -262,15 +272,7 @@ const activeDisplayCanvas = computed<HTMLCanvasElement | null>(() => {
 });
 
 function samplePlanCell(curPlan: ImagePlan, col: number, row: number) {
-  const rect = sourceRectOf(
-    curPlan.canvas.width,
-    curPlan.canvas.height,
-    curPlan.targetWidth,
-    curPlan.targetHeight,
-    col,
-    row
-  );
-  return dominantHexFromRgba(curPlan.imageData.data, curPlan.canvas.width, rect);
+  return sampleCellHexFromRgba(curPlan.imageData.data, curPlan.columns, col, row);
 }
 
 const hoverPreview = computed<{
@@ -352,15 +354,24 @@ async function handleImageFile(file: Blob) {
   }
 }
 
-function onScaleConfirm(payload: { mode: ScaleMode; width: number; height: number }) {
+function onScaleConfirm(payload: {
+  mode: ScaleMode;
+  sampleStyle: SampleStyle;
+  columns: number;
+  rows: number;
+}) {
   if (!sourceCanvas.value) return;
   const nextPlan = buildImagePlan(
     sourceCanvas.value,
     payload.mode,
-    payload.width,
-    payload.height
+    payload.columns,
+    payload.rows,
+    payload.sampleStyle
   );
   plan.value = markRaw(nextPlan);
+  if (nextPlan.columns * nextPlan.rows > MAX_BATCH_CELLS) {
+    batchMode.value = false;
+  }
   picked.value = null;
   resultModalOpen.value = false;
   panelTool.value = 'move';
@@ -368,6 +379,14 @@ function onScaleConfirm(payload: { mode: ScaleMode; width: number; height: numbe
   nextTick(() => {
     resetViewport();
   });
+}
+
+function toggleBatchMode() {
+  if (!batchMode.value && plan.value && plan.value.columns * plan.value.rows > MAX_BATCH_CELLS) {
+    showToast(`超过 ${(MAX_BATCH_CELLS / 10000).toFixed(0)} 万格时仅支持单点取色，请先缩小图格尺寸`);
+    return;
+  }
+  batchMode.value = !batchMode.value;
 }
 
 function onScaleClose() {
@@ -381,7 +400,7 @@ function resetViewport() {
   if (!plan.value) return;
   const { width, height } = viewerSize.value;
   if (width > 0 && height > 0) {
-    viewport.value = fitViewport(plan.value.targetWidth, plan.value.targetHeight, width, height);
+    viewport.value = fitViewport(plan.value.columns, plan.value.rows, width, height);
   }
 }
 
@@ -392,8 +411,8 @@ function zoomBy(factor: number) {
   if (!curPlan || !vp || boxW <= 0 || boxH <= 0) return;
   viewport.value = transformViewport(
     vp,
-    curPlan.targetWidth,
-    curPlan.targetHeight,
+    curPlan.columns,
+    curPlan.rows,
     boxW / 2,
     boxH / 2,
     0,
@@ -428,45 +447,32 @@ function drawViewer() {
   ctx.fillStyle = '#1B1B1B';
   ctx.fillRect(0, 0, boxW, boxH);
 
+  // scale 为每 1 图格占用的屏幕 CSS 像素数
   const scale = boxW / vp.visibleW;
-
-  // 按图格世界坐标 (columns * 16, rows * 16) 整体绘制并裁剪到 targetWidth × targetHeight，
-  // 保证每一格像素与 16×16 网格线 100% 严格对齐
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(
-    -vp.originX * scale,
-    -vp.originY * scale,
-    curPlan.targetWidth * scale,
-    curPlan.targetHeight * scale
-  );
-  ctx.clip();
-  ctx.imageSmoothingEnabled = dispCanvas.width / (curPlan.columns * TILE_SIZE) > scale;
+  ctx.imageSmoothingEnabled = scale < 1;
   ctx.drawImage(
     dispCanvas,
     -vp.originX * scale,
     -vp.originY * scale,
-    curPlan.columns * TILE_SIZE * scale,
-    curPlan.rows * TILE_SIZE * scale
+    curPlan.columns * scale,
+    curPlan.rows * scale
   );
-  ctx.restore();
 
-  const cell = TILE_SIZE * scale;
-  if (cell >= 4) {
+  if (scale >= 4) {
     ctx.strokeStyle = 'rgba(160, 160, 160, 0.42)';
     ctx.lineWidth = 1 / dpr;
     ctx.beginPath();
-    const firstCol = Math.max(0, Math.floor(vp.originX / TILE_SIZE));
-    const lastCol = Math.min(curPlan.columns, Math.ceil((vp.originX + vp.visibleW) / TILE_SIZE));
+    const firstCol = Math.max(0, Math.floor(vp.originX));
+    const lastCol = Math.min(curPlan.columns, Math.ceil(vp.originX + vp.visibleW));
     for (let col = firstCol; col <= lastCol; col++) {
-      const x = (col * TILE_SIZE - vp.originX) * scale;
+      const x = (col - vp.originX) * scale;
       ctx.moveTo(x, 0);
       ctx.lineTo(x, boxH);
     }
-    const firstRow = Math.max(0, Math.floor(vp.originY / TILE_SIZE));
-    const lastRow = Math.min(curPlan.rows, Math.ceil((vp.originY + vp.visibleH) / TILE_SIZE));
+    const firstRow = Math.max(0, Math.floor(vp.originY));
+    const lastRow = Math.min(curPlan.rows, Math.ceil(vp.originY + vp.visibleH));
     for (let row = firstRow; row <= lastRow; row++) {
-      const y = (row * TILE_SIZE - vp.originY) * scale;
+      const y = (row - vp.originY) * scale;
       ctx.moveTo(0, y);
       ctx.lineTo(boxW, y);
     }
@@ -474,20 +480,18 @@ function drawViewer() {
   }
 
   if (panelTool.value === 'pick' && hoverCell.value) {
-    const hx = (hoverCell.value.col * TILE_SIZE - vp.originX) * scale;
-    const hy = (hoverCell.value.row * TILE_SIZE - vp.originY) * scale;
+    const hx = (hoverCell.value.col - vp.originX) * scale;
+    const hy = (hoverCell.value.row - vp.originY) * scale;
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
     ctx.lineWidth = 1.5;
-    ctx.strokeRect(hx, hy, cell, cell);
+    ctx.strokeRect(hx, hy, scale, scale);
   }
 
   if (picked.value) {
-    const cellLeft = picked.value.col * TILE_SIZE;
-    const cellTop = picked.value.row * TILE_SIZE;
-    const x0 = Math.max(cellLeft, vp.originX);
-    const x1 = Math.min(cellLeft + TILE_SIZE, vp.originX + vp.visibleW);
-    const y0 = Math.max(cellTop, vp.originY);
-    const y1 = Math.min(cellTop + TILE_SIZE, vp.originY + vp.visibleH);
+    const x0 = Math.max(picked.value.col, vp.originX);
+    const x1 = Math.min(picked.value.col + 1, vp.originX + vp.visibleW);
+    const y0 = Math.max(picked.value.row, vp.originY);
+    const y1 = Math.min(picked.value.row + 1, vp.originY + vp.visibleH);
     if (x1 > x0 && y1 > y0) {
       ctx.strokeStyle = '#FF3B30';
       ctx.lineWidth = 2;
@@ -524,18 +528,18 @@ function drawOverview() {
   ctx.fillStyle = '#1B1B1B';
   ctx.fillRect(0, 0, boxW, boxH);
 
-  const box = letterbox(boxW, boxH, curPlan.targetWidth, curPlan.targetHeight);
+  const box = letterbox(boxW, boxH, curPlan.columns, curPlan.rows);
   if (box.width <= 0 || box.height <= 0) return;
 
   ctx.imageSmoothingEnabled = dispCanvas.width > box.width;
   ctx.drawImage(dispCanvas, box.left, box.top, box.width, box.height);
 
-  const sx = box.width / curPlan.targetWidth;
-  const sy = box.height / curPlan.targetHeight;
+  const sx = box.width / curPlan.columns;
+  const sy = box.height / curPlan.rows;
   const vx0 = Math.max(0, vp.originX);
-  const vx1 = Math.min(curPlan.targetWidth, vp.originX + vp.visibleW);
+  const vx1 = Math.min(curPlan.columns, vp.originX + vp.visibleW);
   const vy0 = Math.max(0, vp.originY);
-  const vy1 = Math.min(curPlan.targetHeight, vp.originY + vp.visibleH);
+  const vy1 = Math.min(curPlan.rows, vp.originY + vp.visibleH);
   if (vx1 > vx0 && vy1 > vy0) {
     ctx.strokeStyle = '#FF3B30';
     ctx.lineWidth = 2;
@@ -583,10 +587,10 @@ function pickAtCanvasPoint(localX: number, localY: number) {
   const { width: boxW, height: boxH } = viewerSize.value;
   if (!curPlan || !vp || boxW <= 0 || boxH <= 0) return;
 
-  const canvasX = vp.originX + (localX / boxW) * vp.visibleW;
-  const canvasY = vp.originY + (localY / boxH) * vp.visibleH;
-  const col = Math.max(0, Math.min(curPlan.columns - 1, Math.floor(canvasX / TILE_SIZE)));
-  const row = Math.max(0, Math.min(curPlan.rows - 1, Math.floor(canvasY / TILE_SIZE)));
+  const gridX = vp.originX + (localX / boxW) * vp.visibleW;
+  const gridY = vp.originY + (localY / boxH) * vp.visibleH;
+  const col = Math.max(0, Math.min(curPlan.columns - 1, Math.floor(gridX)));
+  const row = Math.max(0, Math.min(curPlan.rows - 1, Math.floor(gridY)));
   const res = samplePlanCell(curPlan, col, row);
   picked.value = { col, row, hex: res.hex, transparent: res.transparent };
   resultModalOpen.value = true;
@@ -621,17 +625,12 @@ function onViewerPointerMove(e: PointerEvent) {
   const pos = pointerLocalPos(e, el);
 
   if (activePointers.size === 0) {
-    const canvasX = vp.originX + (pos.x / boxW) * vp.visibleW;
-    const canvasY = vp.originY + (pos.y / boxH) * vp.visibleH;
-    if (
-      canvasX >= 0 &&
-      canvasX < curPlan.targetWidth &&
-      canvasY >= 0 &&
-      canvasY < curPlan.targetHeight
-    ) {
+    const gridX = vp.originX + (pos.x / boxW) * vp.visibleW;
+    const gridY = vp.originY + (pos.y / boxH) * vp.visibleH;
+    if (gridX >= 0 && gridX < curPlan.columns && gridY >= 0 && gridY < curPlan.rows) {
       hoverCell.value = {
-        col: Math.max(0, Math.min(curPlan.columns - 1, Math.floor(canvasX / TILE_SIZE))),
-        row: Math.max(0, Math.min(curPlan.rows - 1, Math.floor(canvasY / TILE_SIZE))),
+        col: Math.max(0, Math.min(curPlan.columns - 1, Math.floor(gridX))),
+        row: Math.max(0, Math.min(curPlan.rows - 1, Math.floor(gridY))),
       };
     } else {
       hoverCell.value = null;
@@ -648,8 +647,8 @@ function onViewerPointerMove(e: PointerEvent) {
     const zoom = lastPinchDist > 4 && dist > 4 ? dist / lastPinchDist : 1;
     viewport.value = transformViewport(
       vp,
-      curPlan.targetWidth,
-      curPlan.targetHeight,
+      curPlan.columns,
+      curPlan.rows,
       mid.x,
       mid.y,
       panX,
@@ -669,8 +668,8 @@ function onViewerPointerMove(e: PointerEvent) {
     const panY = pos.y - lastPanMid.y;
     viewport.value = transformViewport(
       vp,
-      curPlan.targetWidth,
-      curPlan.targetHeight,
+      curPlan.columns,
+      curPlan.rows,
       pos.x,
       pos.y,
       panX,
@@ -732,8 +731,8 @@ function onViewerWheel(e: WheelEvent) {
   const zoom = Math.exp(-e.deltaY * 0.0015);
   viewport.value = transformViewport(
     vp,
-    curPlan.targetWidth,
-    curPlan.targetHeight,
+    curPlan.columns,
+    curPlan.rows,
     cx,
     cy,
     0,
@@ -754,17 +753,17 @@ function jumpFromOverview(e: PointerEvent) {
   const { width: boxW, height: boxH } = overviewSize.value;
   if (!el || !curPlan || !vp || boxW <= 0 || boxH <= 0) return;
 
-  const box = letterbox(boxW, boxH, curPlan.targetWidth, curPlan.targetHeight);
+  const box = letterbox(boxW, boxH, curPlan.columns, curPlan.rows);
   if (box.width <= 0 || box.height <= 0) return;
 
   const pos = pointerLocalPos(e, el);
   const cx = Math.max(
     0,
-    Math.min(curPlan.targetWidth, ((pos.x - box.left) / box.width) * curPlan.targetWidth)
+    Math.min(curPlan.columns, ((pos.x - box.left) / box.width) * curPlan.columns)
   );
   const cy = Math.max(
     0,
-    Math.min(curPlan.targetHeight, ((pos.y - box.top) / box.height) * curPlan.targetHeight)
+    Math.min(curPlan.rows, ((pos.y - box.top) / box.height) * curPlan.rows)
   );
   viewport.value = clampViewport(
     {
@@ -773,8 +772,8 @@ function jumpFromOverview(e: PointerEvent) {
       visibleW: vp.visibleW,
       visibleH: vp.visibleH,
     },
-    curPlan.targetWidth,
-    curPlan.targetHeight
+    curPlan.columns,
+    curPlan.rows
   );
 }
 
@@ -810,8 +809,8 @@ function observeCanvases() {
       viewerSize.value = { width: rect.width, height: rect.height };
       if (plan.value && rect.width > 0 && rect.height > 0 && (prevW === 0 || prevH === 0 || !viewport.value)) {
         viewport.value = fitViewport(
-          plan.value.targetWidth,
-          plan.value.targetHeight,
+          plan.value.columns,
+          plan.value.rows,
           rect.width,
           rect.height
         );
@@ -1042,7 +1041,7 @@ onUnmounted(() => {
               {{ imageLoading ? '正在解码图片…' : '点击、拖入图片或 Ctrl+V 粘贴' }}
             </div>
             <p class="text-xs text-[#8E807C] max-w-md leading-relaxed">
-              支持按 16×16 图格点选配色，或一键全图批量转换并生成材料清单与施工图纸。
+              支持逐格点选配色，或一键全图批量转换并生成材料清单与施工图纸。
             </p>
           </div>
 
@@ -1095,7 +1094,7 @@ onUnmounted(() => {
                     ? 'border-[#739CBF] bg-[#739CBF] text-white hover:bg-[#5f87a8]'
                     : 'border-[#EADFD9] text-[#4A3F3D] hover:bg-[#F9D6DB]/40'
                 ]"
-                @click="batchMode = !batchMode"
+                @click="toggleBatchMode"
               >
                 <Grid2x2Check class="w-3.5 h-3.5" />
                 <span>{{ batchMode ? '退出全图转换' : '全图转换' }}</span>
@@ -1306,6 +1305,7 @@ onUnmounted(() => {
             :result="batchResult"
             :preview-canvas="batchPreviewCanvas"
             :options="matchOptions"
+            :repository="repository"
             :tag-counts="repository.tagCounts"
             :dithering="batchDithering"
             :skip-transparent="batchSkipTransparent"
@@ -1323,11 +1323,13 @@ onUnmounted(() => {
     <PixelArtScaleModal
       v-if="sourceCanvas"
       :open="scaleModalOpen"
+      :source-canvas="sourceCanvas"
       :source-width="sourceCanvas.width"
       :source-height="sourceCanvas.height"
       :initial-mode="plan?.mode"
-      :initial-width="plan?.targetWidth"
-      :initial-height="plan?.targetHeight"
+      :initial-sample-style="plan?.sampleStyle"
+      :initial-columns="plan?.columns"
+      :initial-rows="plan?.rows"
       @close="onScaleClose"
       @confirm="onScaleConfirm"
     />
@@ -1337,7 +1339,6 @@ onUnmounted(() => {
       v-if="matcher && picked"
       :open="resultModalOpen"
       :title="`图格 列 ${picked.col} · 行 ${picked.row}`"
-      :detail="`画布像素 x ${picked.col * TILE_SIZE}–${(picked.col + 1) * TILE_SIZE - 1} · y ${picked.row * TILE_SIZE}–${(picked.row + 1) * TILE_SIZE - 1}`"
       :target-hex="picked.hex"
       :transparent-hint="picked.transparent"
       :matcher="matcher"

@@ -9,18 +9,20 @@ import {
   calcSimilarity,
   centerCropRect,
   clampViewport,
-  defaultScaleSize,
+  collectBuiltinPresetKeys,
+  defaultGridSize,
   deltaE,
-  dominantHexFromRgba,
+  exportMaterialFilterPreset,
+  fitLongSideGridSize,
   fitViewport,
-  maxFitSize,
   parseHexColor,
-  pixelPerTileSize,
-  planBitmapSize,
-  resolveTargetSize,
+  parseMaterialFilterPreset,
+  resolveGridSize,
   rgbDistance,
   rgbToLab,
-  sourceRectOf,
+  sampleCellHexFromRgba,
+  samplePixelGridFromRgba,
+  toggleKeyInList,
   type MatchOptions,
   type RawMaterialsDatabase,
 } from '../pixelArt';
@@ -56,7 +58,6 @@ describe('pixelArt color math & matcher', () => {
     expect(repo.paintNameOf(1)).toBe('红漆');
 
     const matcher = new PixelArtMatcher(repo);
-    // 泥土块红漆(1)与深红漆(13)同为 #970000，应去重只保留 paintId=1
     const results = matcher.matchCandidates('970000', {
       filter: 'tile',
       includePaint: true,
@@ -75,7 +76,6 @@ describe('pixelArt color math & matcher', () => {
     const repo = loadRepo();
     const matcher = new PixelArtMatcher(repo);
 
-    // 默认排除 falling (沙块 tile:53)，启用 includeFalling 后应可匹配到
     const withoutFalling = matcher.matchCandidates('D3C66E', {
       filter: 'tile',
       includePaint: false,
@@ -93,7 +93,6 @@ describe('pixelArt color math & matcher', () => {
     });
     expect(withFalling.some((c) => c.material.tags.includes('falling'))).toBe(true);
 
-    // 屏蔽第一名后第一名应被替换
     const top1 = withoutFalling[0];
     const afterExclude = matcher.matchCandidates('D3C66E', {
       filter: 'tile',
@@ -117,6 +116,50 @@ describe('pixelArt color math & matcher', () => {
     expect(wallNoPaint.length).toBe(10);
     expect(wallNoPaint.every((c) => c.material.kind === 'wall')).toBe(true);
     expect(wallNoPaint.every((c) => c.paintId === 0)).toBe(true);
+  });
+
+  it('supports include whitelist filterMode and preset export/import helpers', () => {
+    const repo = loadRepo();
+    const matcher = new PixelArtMatcher(repo);
+    const whitelist = ['tile:0', 'tile:1'];
+    const hits = matcher.matchCandidates('976B4B', {
+      filter: 'all',
+      includePaint: false,
+      algorithm: 'lab',
+      topN: 12,
+      filterMode: 'include',
+      includedMaterialKeys: whitelist,
+    });
+    expect(hits.length).toBe(2);
+    expect(hits.every((h) => h.material.kind === 'tile' && (h.material.id === 0 || h.material.id === 1))).toBe(true);
+
+    const emptyHits = matcher.matchCandidates('976B4B', {
+      filter: 'all',
+      includePaint: true,
+      algorithm: 'lab',
+      topN: 12,
+      filterMode: 'include',
+      includedMaterialKeys: [],
+    });
+    expect(emptyHits).toEqual([]);
+
+    const gemWalls = collectBuiltinPresetKeys(repo, 'gemspark_walls_all');
+    expect(gemWalls.length).toBe(14);
+
+    const toggledAdd = toggleKeyInList(['tile:0'], 'tile:1');
+    expect(toggledAdd).toEqual({ next: ['tile:0', 'tile:1'], added: true });
+    const toggledDel = toggleKeyInList(toggledAdd.next, 'tile:0');
+    expect(toggledDel).toEqual({ next: ['tile:1'], added: false });
+
+    const exported = exportMaterialFilterPreset(repo, '晶莹宝石墙包', 'include', gemWalls);
+    const imported = parseMaterialFilterPreset(JSON.stringify(exported), repo);
+    expect(imported.filterMode).toBe('include');
+    expect(imported.keys).toEqual(gemWalls);
+    expect(imported.invalidCount).toBe(0);
+
+    const parsedFallback = parseMaterialFilterPreset('tile:0, invalid:999, tile:1', repo);
+    expect(parsedFallback.keys).toEqual(['tile:0', 'tile:1']);
+    expect(parsedFallback.invalidCount).toBe(1);
   });
 });
 
@@ -149,7 +192,6 @@ describe('KD-Tree index & full-image batch conversion', () => {
 
   it('batch converts RGBA grid with transparent skipping, dithering, and BOM aggregation', () => {
     const repo = loadRepo();
-    // 2x2: [dirt color, red-paint dirt, transparent, white]
     const rgba = new Uint8ClampedArray([
       0x97, 0x6b, 0x4b, 255,
       0x97, 0x00, 0x00, 255,
@@ -184,55 +226,38 @@ describe('KD-Tree index & full-image batch conversion', () => {
   });
 });
 
-describe('pixelArt image scaling & viewport math', () => {
-  it('computes maxFitSize, defaultScaleSize, and resolveTargetSize within 8400x2400', () => {
-    expect(maxFitSize(1600, 800)).toEqual([4800, 2400]);
-    expect(pixelPerTileSize(30, 30)).toEqual([480, 480]);
-    expect(defaultScaleSize(30, 30)).toEqual([480, 480]);
-    expect(defaultScaleSize(1600, 800)).toEqual([4800, 2400]);
-    expect(resolveTargetSize(1600, 800, 'keep_ratio', 8400, 2400)).toEqual([4800, 2400]);
-    expect(resolveTargetSize(100, 100, 'manual', 10000, 5000)).toEqual([8400, 2400]);
-    expect(planBitmapSize(8400, 2400)).toEqual([525, 150]);
+describe('pixelArt grid scaling & viewport math', () => {
+  it('computes defaultGridSize, fitLongSideGridSize, and resolveGridSize within 8400x2400', () => {
+    expect(defaultGridSize(30, 30)).toEqual([30, 30]);
+    expect(defaultGridSize(1920, 1080)).toEqual([256, 144]);
+    expect(fitLongSideGridSize(1600, 800, 8400)).toEqual([4800, 2400]);
+    expect(resolveGridSize(1600, 800, 'keep_ratio', 8400, 2400)).toEqual([4800, 2400]);
+    expect(resolveGridSize(100, 100, 'manual', 10000, 5000)).toEqual([8400, 2400]);
   });
 
-  it('computes centerCropRect and sourceRectOf accurately including non-multiple-of-16 widths', () => {
+  it('computes centerCropRect and samples RGBA cells directly', () => {
     expect(centerCropRect(1000, 500, 400, 400)).toEqual({
       left: 250,
       top: 0,
       right: 750,
       bottom: 500,
     });
-    expect(sourceRectOf(525, 150, 8400, 2400, 10, 5)).toEqual({
-      left: 10,
-      top: 5,
-      right: 11,
-      bottom: 6,
-    });
-    // 非 16 倍数画布宽度（1000x600 -> 63x38 图格）也应严格一一对应
-    expect(sourceRectOf(63, 38, 1000, 600, 62, 37)).toEqual({
-      left: 62,
-      top: 37,
-      right: 63,
-      bottom: 38,
-    });
-  });
 
-  it('picks dominant hex and flags fully transparent cells', () => {
     const rgba = new Uint8ClampedArray([
       255, 0, 0, 255,
       0, 0, 0, 0,
     ]);
-    expect(dominantHexFromRgba(rgba, 2, { left: 0, top: 0, right: 1, bottom: 1 })).toEqual({
+    expect(sampleCellHexFromRgba(rgba, 2, 0, 0)).toEqual({
       hex: 'FF0000',
       transparent: false,
     });
-    expect(dominantHexFromRgba(rgba, 2, { left: 1, top: 0, right: 2, bottom: 1 })).toEqual({
+    expect(sampleCellHexFromRgba(rgba, 2, 1, 0)).toEqual({
       hex: '1B1B1B',
       transparent: true,
     });
   });
 
-  it('fits and clamps viewport inside canvas bounds', () => {
+  it('fits and clamps viewport inside grid bounds', () => {
     const vp = fitViewport(8400, 2400, 840, 480);
     expect(vp.visibleW).toBe(8400);
     expect(vp.visibleH).toBe(4800);
@@ -240,5 +265,109 @@ describe('pixelArt image scaling & viewport math', () => {
     const clamped = clampViewport({ originX: 500, originY: -3000, visibleW: 8400, visibleH: 4800 }, 8400, 2400);
     expect(clamped.originX).toBe(0);
     expect(clamped.originY).toBe(-2400);
+  });
+});
+
+describe('pixelGrid core sampling', () => {
+  const palette: Array<[number, number, number]> = [
+    [220, 48, 48],
+    [40, 140, 230],
+    [48, 185, 92],
+    [240, 195, 40],
+    [155, 70, 210],
+    [35, 42, 60],
+  ];
+
+  it('skips 1px white divider lines and recovers pure cell colors', () => {
+    const cols = 16;
+    const rows = 12;
+    const cell = 15;
+    const w = cols * cell;
+    const h = rows * cell;
+    const rgba = new Uint8ClampedArray(w * h * 4);
+    const cellRgb = (c: number, r: number) => palette[(c * 5 + r * 3) % palette.length];
+
+    for (let y = 0; y < h; y++) {
+      const r = Math.floor(y / cell);
+      const inY = y % cell;
+      for (let x = 0; x < w; x++) {
+        const c = Math.floor(x / cell);
+        const inX = x % cell;
+        const idx = (y * w + x) * 4;
+        if (inX === 0 || inY === 0) {
+          rgba[idx] = 255;
+          rgba[idx + 1] = 255;
+          rgba[idx + 2] = 255;
+          rgba[idx + 3] = 255;
+        } else {
+          const [cr, cg, cb] = cellRgb(c, r);
+          rgba[idx] = cr;
+          rgba[idx + 1] = cg;
+          rgba[idx + 2] = cb;
+          rgba[idx + 3] = 255;
+        }
+      }
+    }
+
+    const sampled = samplePixelGridFromRgba(rgba, w, h, cols, rows);
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const [er, eg, eb] = cellRgb(c, r);
+        const o = (r * cols + c) * 4;
+        expect(sampled[o]).toBe(er);
+        expect(sampled[o + 1]).toBe(eg);
+        expect(sampled[o + 2]).toBe(eb);
+      }
+    }
+  });
+
+  it('ignores anti-aliased boundary blending across adjacent pixel blocks', () => {
+    const cols = 16;
+    const rows = 12;
+    const cell = 16;
+    const w = cols * cell;
+    const h = rows * cell;
+    const rgba = new Uint8ClampedArray(w * h * 4);
+    const cellRgb = (c: number, r: number) => palette[(c * 7 + r * 2) % palette.length];
+
+    for (let y = 0; y < h; y++) {
+      const r = Math.floor(y / cell);
+      const inY = y % cell;
+      for (let x = 0; x < w; x++) {
+        const c = Math.floor(x / cell);
+        const inX = x % cell;
+        const [cr, cg, cb] = cellRgb(c, r);
+        let rr = cr;
+        let gg = cg;
+        let bb = cb;
+        if (inX === 0 && c > 0) {
+          const [pr, pg, pb] = cellRgb(c - 1, r);
+          rr = Math.round((cr + pr) / 2);
+          gg = Math.round((cg + pg) / 2);
+          bb = Math.round((cb + pb) / 2);
+        } else if (inY === 0 && r > 0) {
+          const [pr, pg, pb] = cellRgb(c, r - 1);
+          rr = Math.round((cr + pr) / 2);
+          gg = Math.round((cg + pg) / 2);
+          bb = Math.round((cb + pb) / 2);
+        }
+        const idx = (y * w + x) * 4;
+        rgba[idx] = rr;
+        rgba[idx + 1] = gg;
+        rgba[idx + 2] = bb;
+        rgba[idx + 3] = 255;
+      }
+    }
+
+    const sampled = samplePixelGridFromRgba(rgba, w, h, cols, rows);
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const [er, eg, eb] = cellRgb(c, r);
+        const o = (r * cols + c) * 4;
+        expect(sampled[o]).toBe(er);
+        expect(sampled[o + 1]).toBe(eg);
+        expect(sampled[o + 2]).toBe(eb);
+      }
+    }
   });
 });

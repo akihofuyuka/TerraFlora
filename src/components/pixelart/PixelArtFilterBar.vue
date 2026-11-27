@@ -1,16 +1,21 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { ChevronDown, ChevronUp, RotateCcw } from 'lucide-vue-next';
-import type {
-  KindFilter,
-  MatchAlgorithm,
-  MatchOptions,
-  TagCounts,
+import { ChevronDown, ChevronUp, ListFilter, RotateCcw } from 'lucide-vue-next';
+import {
+  normalizeKeyList,
+  type FilterMode,
+  type KindFilter,
+  type MatchAlgorithm,
+  type MatchOptions,
+  type MaterialsRepository,
+  type TagCounts,
 } from '@/core/pixelArt';
+import PixelArtFilterModal from './PixelArtFilterModal.vue';
 
 const props = defineProps<{
   options: MatchOptions;
   tagCounts?: TagCounts;
+  repository?: MaterialsRepository | null;
 }>();
 
 const emit = defineEmits<{
@@ -18,6 +23,7 @@ const emit = defineEmits<{
 }>();
 
 const showAdvanced = ref(false);
+const filterModalOpen = ref(false);
 
 const kindOptions: Array<{ value: KindFilter; label: string }> = [
   { value: 'all', label: '全部' },
@@ -35,11 +41,14 @@ const algoOptions: Array<{ value: MatchAlgorithm; label: string }> = [
   { value: 'rgb', label: 'RGB 距离' },
 ];
 
-const excludedCount = computed(() => {
-  const ex = props.options.excludedMaterialKeys;
-  if (!ex) return 0;
-  return ex instanceof Set ? ex.size : ex.length;
-});
+const filterModeOptions: Array<{ value: FilterMode; label: string }> = [
+  { value: 'exclude', label: '全库排除' },
+  { value: 'include', label: '只用自选' },
+];
+
+const activeFilterMode = computed<FilterMode>(() => props.options.filterMode ?? 'exclude');
+const excludedCount = computed(() => normalizeKeyList(props.options.excludedMaterialKeys).length);
+const includedCount = computed(() => normalizeKeyList(props.options.includedMaterialKeys).length);
 
 const activeTierCount = computed(() => {
   let n = 0;
@@ -123,8 +132,62 @@ function clearExcluded() {
       </div>
     </div>
 
-    <!-- 可调回忽略档位 + 屏蔽列表 -->
-    <div class="flex items-center justify-between gap-2 flex-wrap">
+    <!-- 筛选模式切换（全库排除 vs 只用自选） + 清单管理入口 -->
+    <div class="flex items-center justify-between gap-2 flex-wrap bg-[#FFF7F2] border border-[#EADFD9] rounded-xl px-2.5 py-2">
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="text-[11px] font-semibold text-[#8E807C]">筛选模式</span>
+        <div class="flex items-center bg-white border border-[#EADFD9] rounded-lg p-0.5 gap-0.5">
+          <button
+            v-for="item in filterModeOptions"
+            :key="item.value"
+            type="button"
+            :class="[
+              'px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer select-none',
+              activeFilterMode === item.value
+                ? 'bg-[#739CBF] text-white shadow-2xs'
+                : 'text-[#4A3F3D] hover:bg-[#EFE7E2]'
+            ]"
+            @click="patch({ filterMode: item.value })"
+          >
+            {{ item.label }}
+            <template v-if="item.value === 'include'">({{ includedCount }})</template>
+          </button>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-1.5 flex-wrap">
+        <button
+          v-if="activeFilterMode === 'exclude' && excludedCount > 0"
+          type="button"
+          class="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg bg-[#F9D6DB]/60 border border-[#E598A3] text-[#4A3F3D] font-semibold hover:bg-[#F9D6DB] cursor-pointer"
+          title="点击清空屏蔽清单"
+          @click="clearExcluded"
+        >
+          <RotateCcw class="w-3 h-3" />
+          <span>已屏蔽 {{ excludedCount }}</span>
+        </button>
+
+        <button
+          v-if="repository"
+          type="button"
+          class="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-lg bg-white border border-[#739CBF]/45 text-[#2F658D] font-semibold hover:bg-[#739CBF]/10 cursor-pointer"
+          @click="filterModalOpen = true"
+        >
+          <ListFilter class="w-3.5 h-3.5" />
+          <span>管理清单 / 导入导出</span>
+        </button>
+      </div>
+    </div>
+
+    <p
+      v-if="activeFilterMode === 'include' && includedCount === 0"
+      class="text-[11px] text-amber-700 bg-amber-50/70 border border-amber-200 rounded-lg px-2.5 py-1.5"
+    >
+      当前「自选清单」为空；可点击上方「管理清单 / 导入导出」批量勾选或导入，也可在取色结果中点 + 加入。
+    </p>
+
+    <!-- 可调回忽略档位（仅全库排除模式生效） -->
+    <div v-if="activeFilterMode === 'exclude'" class="flex items-center justify-between gap-2 flex-wrap">
       <button
         type="button"
         class="inline-flex items-center gap-1 text-[11px] font-semibold text-[#739CBF] hover:underline cursor-pointer select-none"
@@ -137,21 +200,10 @@ function clearExcluded() {
           <template v-if="activeTierCount > 0">（已启用 {{ activeTierCount }} 档）</template>
         </span>
       </button>
-
-      <button
-        v-if="excludedCount > 0"
-        type="button"
-        class="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md bg-[#F9D6DB]/60 border border-[#E598A3] text-[#4A3F3D] font-semibold hover:bg-[#F9D6DB] cursor-pointer"
-        title="点击清空手动屏蔽的材料"
-        @click="clearExcluded"
-      >
-        <RotateCcw class="w-3 h-3" />
-        <span>已屏蔽 {{ excludedCount }} 项 · 重置</span>
-      </button>
     </div>
 
     <div
-      v-if="showAdvanced"
+      v-if="activeFilterMode === 'exclude' && showAdvanced"
       class="bg-[#FFF7F2] border border-[#EADFD9] rounded-xl p-2.5 flex items-center gap-1.5 flex-wrap"
     >
       <button
@@ -214,5 +266,14 @@ function clearExcluded() {
         <span v-if="tagCounts" class="opacity-75">+{{ tagCounts.special }}</span>
       </button>
     </div>
+
+    <PixelArtFilterModal
+      v-if="repository"
+      :open="filterModalOpen"
+      :repository="repository"
+      :options="options"
+      @close="filterModalOpen = false"
+      @update:options="emit('update:options', $event)"
+    />
   </div>
 </template>

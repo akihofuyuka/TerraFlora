@@ -1,16 +1,17 @@
 /*! @license AGPL-3.0 | Author: akihofuyuka */
 
-export const TILE_SIZE = 16;
+import { samplePixelGridFromRgba, type SampleStyle } from './pixelGrid';
+
+export type { SampleStyle } from './pixelGrid';
+export { samplePixelGridFromRgba } from './pixelGrid';
+
 const MAX_IMAGE_SIDE = 2048;
-export const MAX_CANVAS_WIDTH = 8400;
-export const MAX_CANVAS_HEIGHT = 2400;
-const MIN_VISIBLE_CANVAS = TILE_SIZE;
+export const MAX_TILES_WIDTH = 8400;
+export const MAX_TILES_HEIGHT = 2400;
+export const MAX_BATCH_CELLS = 300_000;
+const MIN_VISIBLE_TILES = 1;
 export const DEFAULT_TOP_N = 12;
 
-export const MAX_RGB_DISTANCE = Math.sqrt(3 * 255 * 255);
-export const MAX_DELTA_E = 150.0;
-
-/** PaintID (1..30) -> Terraria ItemID mapping for rendering paint bucket sprites */
 export const PAINT_ITEM_IDS: Record<number, number> = {
   1: 1073,
   2: 1074,
@@ -44,11 +45,48 @@ export const PAINT_ITEM_IDS: Record<number, number> = {
   30: 1968,
 };
 
+export const MAX_RGB_DISTANCE = Math.sqrt(3 * 255 * 255);
+export const MAX_DELTA_E = 150.0;
+
 export type MaterialKind = 'tile' | 'wall';
 export type MaterialTag = 'falling' | 'solid_top' | 'unsafe_wall' | 'special';
 export type MatchAlgorithm = 'lab' | 'rgb';
 export type KindFilter = 'all' | 'tile' | 'wall';
+export type FilterMode = 'exclude' | 'include';
 export type ScaleMode = 'keep_ratio' | 'fill' | 'manual';
+
+export interface BuiltinFilterPreset {
+  id: string;
+  label: string;
+  desc: string;
+  keys: string[];
+}
+
+export const GEMSPARK_WALL_KEYS: string[] = [
+  'wall:153', // 琥珀晶莹宝石墙
+  'wall:154', // 紫晶晶莹宝石墙
+  'wall:155', // 钻石晶莹宝石墙
+  'wall:156', // 翡翠晶莹宝石墙
+  'wall:164', // 红玉晶莹宝石墙
+  'wall:165', // 蓝玉晶莹宝石墙
+  'wall:166', // 黄玉晶莹宝石墙
+  'wall:157', // 黯淡琥珀晶莹宝石墙
+  'wall:158', // 黯淡紫晶晶莹宝石墙
+  'wall:159', // 黯淡钻石晶莹宝石墙
+  'wall:160', // 黯淡翡翠晶莹宝石墙
+  'wall:161', // 黯淡红玉晶莹宝石墙
+  'wall:162', // 黯淡蓝玉晶莹宝石墙
+  'wall:163', // 黯淡黄玉晶莹宝石墙
+];
+
+export const BUILTIN_FILTER_PRESETS: BuiltinFilterPreset[] = [
+  {
+    id: 'gemspark_walls_all',
+    label: '晶莹宝石墙全套',
+    desc: '亮色 + 黯淡 14 种晶莹宝石墙，纯色平滑无杂纹',
+    keys: GEMSPARK_WALL_KEYS,
+  },
+];
 
 export interface RawMaterialEntry {
   kind: MaterialKind;
@@ -87,7 +125,9 @@ export interface MatchOptions {
   includeSolidTop?: boolean;
   includeUnsafeWalls?: boolean;
   includeSpecial?: boolean;
+  filterMode?: FilterMode;
   excludedMaterialKeys?: Set<string> | string[];
+  includedMaterialKeys?: Set<string> | string[];
 }
 
 export interface MatchCandidate {
@@ -275,20 +315,173 @@ export class MaterialsRepository {
   }
 }
 
-function toExcludedSet(excluded?: Set<string> | string[]): Set<string> | null {
-  if (!excluded) return null;
-  if (excluded instanceof Set) return excluded.size > 0 ? excluded : null;
-  return excluded.length > 0 ? new Set(excluded) : null;
+function toKeySet(keys?: Set<string> | string[]): Set<string> | null {
+  if (!keys) return null;
+  if (keys instanceof Set) return keys.size > 0 ? keys : null;
+  return keys.length > 0 ? new Set(keys) : null;
+}
+
+export function normalizeKeyList(keys?: Set<string> | string[]): string[] {
+  if (!keys) return [];
+  return keys instanceof Set ? Array.from(keys) : [...keys];
+}
+
+export function toggleKeyInList(keys: Set<string> | string[] | undefined, key: string): {
+  next: string[];
+  added: boolean;
+} {
+  const set = new Set(normalizeKeyList(keys));
+  let added = false;
+  if (set.has(key)) {
+    set.delete(key);
+  } else {
+    set.add(key);
+    added = true;
+  }
+  return { next: Array.from(set), added };
+}
+
+export interface MaterialFilterPreset {
+  format: 'terraflora-material-filter';
+  version: 1;
+  name: string;
+  filterMode: FilterMode;
+  keys: string[];
+  items?: Array<{ key: string; name: string; kind: MaterialKind; itemId: number }>;
+  exportedAt: string;
+}
+
+export function collectBuiltinPresetKeys(
+  repository: MaterialsRepository,
+  presetId: string
+): string[] {
+  const preset = BUILTIN_FILTER_PRESETS.find((p) => p.id === presetId);
+  if (!preset) return [];
+  const valid = new Set(repository.materials.map((m) => materialKey(m)));
+  return preset.keys.filter((k) => valid.has(k));
+}
+
+export function exportMaterialFilterPreset(
+  repository: MaterialsRepository,
+  name: string,
+  filterMode: FilterMode,
+  keys: Set<string> | string[]
+): MaterialFilterPreset {
+  const byKey = new Map(repository.materials.map((m) => [materialKey(m), m]));
+  const normalized = normalizeKeyList(keys);
+  const items: Array<{ key: string; name: string; kind: MaterialKind; itemId: number }> = [];
+  for (const k of normalized) {
+    const mat = byKey.get(k);
+    if (mat) {
+      items.push({ key: k, name: mat.name, kind: mat.kind, itemId: mat.itemId });
+    }
+  }
+  return {
+    format: 'terraflora-material-filter',
+    version: 1,
+    name: name.trim() || (filterMode === 'include' ? '自选材料列表' : '屏蔽材料列表'),
+    filterMode,
+    keys: normalized,
+    items,
+    exportedAt: new Date().toISOString(),
+  };
+}
+
+export function parseMaterialFilterPreset(
+  rawText: string,
+  repository?: MaterialsRepository | null
+): {
+  name?: string;
+  filterMode?: FilterMode;
+  keys: string[];
+  invalidCount: number;
+} {
+  const trimmed = rawText.trim();
+  if (!trimmed) {
+    throw new Error('导入内容为空');
+  }
+
+  let parsedName: string | undefined;
+  let parsedMode: FilterMode | undefined;
+  let rawKeys: unknown[] = [];
+
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (Array.isArray(parsed)) {
+      rawKeys = parsed;
+    } else if (parsed && typeof parsed === 'object') {
+      const obj = parsed as Record<string, unknown>;
+      if (typeof obj.name === 'string' && obj.name.trim()) {
+        parsedName = obj.name.trim();
+      }
+      if (obj.filterMode === 'exclude' || obj.filterMode === 'include') {
+        parsedMode = obj.filterMode;
+      }
+      if (Array.isArray(obj.keys)) {
+        rawKeys = obj.keys;
+      } else if (Array.isArray(obj.items)) {
+        rawKeys = obj.items.map((it) =>
+          it && typeof it === 'object' ? (it as Record<string, unknown>).key : null
+        );
+      } else {
+        throw new Error('JSON 中缺少 keys 字段');
+      }
+    } else {
+      throw new Error('无效的 JSON 格式');
+    }
+  } else {
+    rawKeys = trimmed
+      .split(/[\s,，;；]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+
+  const validRepoKeys = repository
+    ? new Set(repository.materials.map((m) => materialKey(m)))
+    : null;
+  const deduped = new Set<string>();
+  let invalidCount = 0;
+
+  for (const entry of rawKeys) {
+    if (typeof entry !== 'string') {
+      invalidCount++;
+      continue;
+    }
+    const k = entry.trim().toLowerCase();
+    if (!/^(tile|wall):\d+$/.test(k)) {
+      invalidCount++;
+      continue;
+    }
+    if (validRepoKeys && !validRepoKeys.has(k)) {
+      invalidCount++;
+      continue;
+    }
+    deduped.add(k);
+  }
+
+  return {
+    name: parsedName,
+    filterMode: parsedMode,
+    keys: Array.from(deduped),
+    invalidCount,
+  };
 }
 
 export function isMaterialAllowed(
   material: MaterialDef,
   options: MatchOptions,
-  excludedSet?: Set<string> | null
+  excludedSet?: Set<string> | null,
+  includedSet?: Set<string> | null
 ): boolean {
   if (options.filter === 'tile' && material.kind !== 'tile') return false;
   if (options.filter === 'wall' && material.kind !== 'wall') return false;
-  if (excludedSet && excludedSet.has(materialKey(material))) return false;
+
+  const key = materialKey(material);
+  if ((options.filterMode ?? 'exclude') === 'include') {
+    return Boolean(includedSet && includedSet.has(key));
+  }
+
+  if (excludedSet && excludedSet.has(key)) return false;
 
   for (const tag of material.tags) {
     if (tag === 'falling' && !options.includeFalling) return false;
@@ -313,9 +506,10 @@ export class PixelArtMatcher {
     const useLab = options.algorithm === 'lab';
     const targetLab = useLab ? rgbToLab(normalized) : null;
     const maxDistance = useLab ? MAX_DELTA_E : MAX_RGB_DISTANCE;
-    const excludedSet = toExcludedSet(options.excludedMaterialKeys);
+    const excludedSet = toKeySet(options.excludedMaterialKeys);
+    const includedSet = toKeySet(options.includedMaterialKeys);
 
-    // 同一材料的同色漆变体（例如 红漆 1 与 深红漆 13 地图色相同）按键去重，保留漆 ID 最小的一个
+    // 同一材料的同色漆变体按键去重，保留漆 ID 最小的一个
     const unique = new Map<string, MatchCandidate>();
 
     const consider = (material: MaterialDef, paintId: number, hex: string) => {
@@ -336,7 +530,7 @@ export class PixelArtMatcher {
     };
 
     for (const material of this.repository.materials) {
-      if (!isMaterialAllowed(material, options, excludedSet)) continue;
+      if (!isMaterialAllowed(material, options, excludedSet, includedSet)) continue;
 
       consider(material, 0, material.baseHex);
       if (options.includePaint) {
@@ -389,14 +583,13 @@ export class PixelArtColorIndex {
   constructor(repository: MaterialsRepository, options: MatchOptions) {
     this.algorithm = options.algorithm;
     const useLab = options.algorithm === 'lab';
-    const excludedSet = toExcludedSet(options.excludedMaterialKeys);
+    const excludedSet = toKeySet(options.excludedMaterialKeys);
+    const includedSet = toKeySet(options.includedMaterialKeys);
 
-    // 按实际颜色 HEX 去重（优先保留无漆 > 漆ID小），大幅缩减树节点并保证一致的确定性选择
     const byHex = new Map<string, MatchCandidate>();
     const register = (material: MaterialDef, paintId: number, hex: string) => {
       const existing = byHex.get(hex);
       if (existing) {
-        // 优先无漆 (paintId === 0)，其次 paintId 更小
         if (existing.paintId === 0 || (paintId !== 0 && existing.paintId <= paintId)) {
           return;
         }
@@ -413,7 +606,7 @@ export class PixelArtColorIndex {
     };
 
     for (const material of repository.materials) {
-      if (!isMaterialAllowed(material, options, excludedSet)) continue;
+      if (!isMaterialAllowed(material, options, excludedSet, includedSet)) continue;
       register(material, 0, material.baseHex);
       if (options.includePaint) {
         for (const [paintId, hex] of material.paintHexes) {
@@ -643,7 +836,7 @@ export function batchConvertRgba(
   };
 }
 
-/* ==================== 画布缩放 / 裁剪 / 视口几何计算 ==================== */
+/* ==================== 图格尺寸缩放 / 裁剪 / 视口几何计算 ==================== */
 
 export interface SrcRect {
   left: number;
@@ -677,100 +870,84 @@ export interface ImagePlan {
   canvas: HTMLCanvasElement;
   imageData: ImageData;
   mode: ScaleMode;
-  targetWidth: number;
-  targetHeight: number;
+  sampleStyle: SampleStyle;
   columns: number;
   rows: number;
 }
 
-export function clampCanvasSize(value: number, limit: number): number {
-  return Math.max(TILE_SIZE, Math.min(limit, value));
+export function clampGridSize(value: number, limit: number): number {
+  return Math.max(1, Math.min(limit, Math.round(value)));
 }
 
-export function maxFitSize(sourceWidth: number, sourceHeight: number): [number, number] {
-  if (sourceWidth <= 0 || sourceHeight <= 0) return [TILE_SIZE, TILE_SIZE];
-  const scale = Math.min(MAX_CANVAS_WIDTH / sourceWidth, MAX_CANVAS_HEIGHT / sourceHeight);
+/** 按指定长边等比缩放图格尺寸（并约束在世界图格上限内） */
+export function fitLongSideGridSize(
+  sourceWidth: number,
+  sourceHeight: number,
+  maxLongSide: number
+): [number, number] {
+  if (sourceWidth <= 0 || sourceHeight <= 0) return [1, 1];
+  const scale = Math.min(
+    maxLongSide / Math.max(sourceWidth, sourceHeight),
+    MAX_TILES_WIDTH / sourceWidth,
+    MAX_TILES_HEIGHT / sourceHeight
+  );
   return [
-    clampCanvasSize(Math.round(sourceWidth * scale), MAX_CANVAS_WIDTH),
-    clampCanvasSize(Math.round(sourceHeight * scale), MAX_CANVAS_HEIGHT),
+    clampGridSize(sourceWidth * scale, MAX_TILES_WIDTH),
+    clampGridSize(sourceHeight * scale, MAX_TILES_HEIGHT),
   ];
 }
 
-/** 1 原图像素 = 1 泰拉图格（16×16 画布像素），适合直接导入像素画素材 */
-export function pixelPerTileSize(sourceWidth: number, sourceHeight: number): [number, number] {
-  if (sourceWidth <= 0 || sourceHeight <= 0) return [TILE_SIZE, TILE_SIZE];
-  const w = sourceWidth * TILE_SIZE;
-  const h = sourceHeight * TILE_SIZE;
-  if (w <= MAX_CANVAS_WIDTH && h <= MAX_CANVAS_HEIGHT) {
-    return [w, h];
+export function defaultGridSize(sourceWidth: number, sourceHeight: number): [number, number] {
+  if (sourceWidth <= 0 || sourceHeight <= 0) return [1, 1];
+  if (sourceWidth <= 256 && sourceHeight <= 256) {
+    return [sourceWidth, sourceHeight];
   }
-  const scale = Math.min(MAX_CANVAS_WIDTH / w, MAX_CANVAS_HEIGHT / h);
-  return [
-    Math.max(TILE_SIZE, Math.floor((w * scale) / TILE_SIZE) * TILE_SIZE),
-    Math.max(TILE_SIZE, Math.floor((h * scale) / TILE_SIZE) * TILE_SIZE),
-  ];
-}
-
-export function defaultScaleSize(sourceWidth: number, sourceHeight: number): [number, number] {
-  const maxCols = Math.floor(MAX_CANVAS_WIDTH / TILE_SIZE);
-  const maxRows = Math.floor(MAX_CANVAS_HEIGHT / TILE_SIZE);
-  // 小尺寸像素画默认按 1 像素 = 1 图格处理
-  if (sourceWidth > 0 && sourceHeight > 0 && sourceWidth <= maxCols && sourceHeight <= maxRows) {
-    return [sourceWidth * TILE_SIZE, sourceHeight * TILE_SIZE];
-  }
-  return maxFitSize(sourceWidth, sourceHeight);
+  return fitLongSideGridSize(sourceWidth, sourceHeight, 256);
 }
 
 /** height 传 0 表示按宽算高，反之亦然 */
-export function keepRatioDim(
+export function keepRatioGridDim(
   sourceWidth: number,
   sourceHeight: number,
-  width: number,
-  height: number
+  cols: number,
+  rows: number
 ): number {
-  if (sourceWidth <= 0 || sourceHeight <= 0) return TILE_SIZE;
-  if (height === 0) {
-    return Math.round((width * sourceHeight) / sourceWidth);
+  if (sourceWidth <= 0 || sourceHeight <= 0) return 1;
+  if (rows === 0) {
+    return Math.max(1, Math.round((cols * sourceHeight) / sourceWidth));
   }
-  return Math.round((height * sourceWidth) / sourceHeight);
+  return Math.max(1, Math.round((rows * sourceWidth) / sourceHeight));
 }
 
-export function resolveTargetSize(
+export function resolveGridSize(
   sourceWidth: number,
   sourceHeight: number,
   mode: ScaleMode,
-  width: number,
-  height: number
+  cols: number,
+  rows: number
 ): [number, number] {
   if (mode === 'keep_ratio') {
-    let w = clampCanvasSize(width, MAX_CANVAS_WIDTH);
-    let h = keepRatioDim(sourceWidth, sourceHeight, w, 0);
-    if (h > MAX_CANVAS_HEIGHT) {
-      h = MAX_CANVAS_HEIGHT;
-      w = clampCanvasSize(keepRatioDim(sourceWidth, sourceHeight, 0, h), MAX_CANVAS_WIDTH);
+    let c = clampGridSize(cols, MAX_TILES_WIDTH);
+    let r = keepRatioGridDim(sourceWidth, sourceHeight, c, 0);
+    if (r > MAX_TILES_HEIGHT) {
+      r = MAX_TILES_HEIGHT;
+      c = clampGridSize(keepRatioGridDim(sourceWidth, sourceHeight, 0, r), MAX_TILES_WIDTH);
     }
-    return [w, Math.max(h, TILE_SIZE)];
+    return [c, Math.max(1, r)];
   }
   return [
-    clampCanvasSize(width, MAX_CANVAS_WIDTH),
-    clampCanvasSize(height, MAX_CANVAS_HEIGHT),
-  ];
-}
-
-export function planBitmapSize(canvasWidth: number, canvasHeight: number): [number, number] {
-  return [
-    Math.max(1, Math.ceil(canvasWidth / TILE_SIZE)),
-    Math.max(1, Math.ceil(canvasHeight / TILE_SIZE)),
+    clampGridSize(cols, MAX_TILES_WIDTH),
+    clampGridSize(rows, MAX_TILES_HEIGHT),
   ];
 }
 
 export function centerCropRect(
   srcWidth: number,
   srcHeight: number,
-  dstWidth: number,
-  dstHeight: number
+  dstCols: number,
+  dstRows: number
 ): SrcRect {
-  const targetAspect = dstWidth / dstHeight;
+  const targetAspect = dstCols / dstRows;
   if (srcWidth / srcHeight > targetAspect) {
     const width = Math.max(1, Math.min(srcWidth, Math.round(srcHeight * targetAspect)));
     const left = Math.floor((srcWidth - width) / 2);
@@ -782,88 +959,41 @@ export function centerCropRect(
   }
 }
 
-export function sourceRectOf(
-  bitmapW: number,
-  bitmapH: number,
-  _targetW: number,
-  _targetH: number,
-  col: number,
-  row: number
-): SrcRect {
-  const left = Math.max(0, Math.min(bitmapW - 1, col));
-  const top = Math.max(0, Math.min(bitmapH - 1, row));
-  return { left, top, right: left + 1, bottom: top + 1 };
-}
-
-/** 从 RGBA 像素数组取一个图格的颜色；全透明格返回 transparent: true */
-export function dominantHexFromRgba(
+export function sampleCellHexFromRgba(
   data: Uint8ClampedArray,
   imgWidth: number,
-  rect: SrcRect,
+  col: number,
+  row: number,
   bgRgb: RgbTuple = [27, 27, 27]
 ): { hex: string; transparent: boolean } {
-  const counts = new Map<number, number>();
-  let sumRed = 0;
-  let sumGreen = 0;
-  let sumBlue = 0;
-  let samples = 0;
-  let opaqueSamples = 0;
-
-  for (let y = rect.top; y < rect.bottom; y++) {
-    for (let x = rect.left; x < rect.right; x++) {
-      const idx = (y * imgWidth + x) * 4;
-      const a = data[idx + 3] / 255;
-      if (data[idx + 3] > 0) opaqueSamples++;
-      const r = Math.round(data[idx] * a + bgRgb[0] * (1 - a));
-      const g = Math.round(data[idx + 1] * a + bgRgb[1] * (1 - a));
-      const b = Math.round(data[idx + 2] * a + bgRgb[2] * (1 - a));
-      const rgb = (r << 16) | (g << 8) | b;
-      counts.set(rgb, (counts.get(rgb) ?? 0) + 1);
-      sumRed += r;
-      sumGreen += g;
-      sumBlue += b;
-      samples++;
-    }
-  }
-
-  if (samples === 0) {
+  const idx = (row * imgWidth + col) * 4;
+  if (idx < 0 || idx + 3 >= data.length) {
     return { hex: '000000', transparent: true };
   }
-
-  let bestColor = -1;
-  let bestCount = 0;
-  for (const [color, count] of counts.entries()) {
-    if (count > bestCount) {
-      bestCount = count;
-      bestColor = color;
-    }
-  }
-
-  const finalColor =
-    bestColor >= 0 && bestCount > 1
-      ? bestColor
-      : (Math.floor(sumRed / samples) << 16) |
-        (Math.floor(sumGreen / samples) << 8) |
-        Math.floor(sumBlue / samples);
-
+  const aByte = data[idx + 3];
+  const a = aByte / 255;
+  const r = Math.round(data[idx] * a + bgRgb[0] * (1 - a));
+  const g = Math.round(data[idx + 1] * a + bgRgb[1] * (1 - a));
+  const b = Math.round(data[idx + 2] * a + bgRgb[2] * (1 - a));
+  const rgb = (r << 16) | (g << 8) | b;
   return {
-    hex: (finalColor & 0xffffff).toString(16).padStart(6, '0').toUpperCase(),
-    transparent: opaqueSamples === 0,
+    hex: (rgb & 0xffffff).toString(16).padStart(6, '0').toUpperCase(),
+    transparent: aByte === 0,
   };
 }
 
 export function letterbox(
   boxWidth: number,
   boxHeight: number,
-  canvasWidth: number,
-  canvasHeight: number
+  columns: number,
+  rows: number
 ): BoxRect {
-  if (boxWidth <= 0 || boxHeight <= 0 || canvasWidth <= 0 || canvasHeight <= 0) {
+  if (boxWidth <= 0 || boxHeight <= 0 || columns <= 0 || rows <= 0) {
     return { left: 0, top: 0, width: 0, height: 0 };
   }
-  const scale = Math.min(boxWidth / canvasWidth, boxHeight / canvasHeight);
-  const width = canvasWidth * scale;
-  const height = canvasHeight * scale;
+  const scale = Math.min(boxWidth / columns, boxHeight / rows);
+  const width = columns * scale;
+  const height = rows * scale;
   return {
     left: (boxWidth - width) / 2,
     top: (boxHeight - height) / 2,
@@ -873,43 +1003,43 @@ export function letterbox(
 }
 
 export function fitViewport(
-  targetWidth: number,
-  targetHeight: number,
+  columns: number,
+  rows: number,
   boxWidth: number,
   boxHeight: number
 ): Viewport {
   if (boxWidth <= 0 || boxHeight <= 0) {
-    return { originX: 0, originY: 0, visibleW: targetWidth, visibleH: targetHeight };
+    return { originX: 0, originY: 0, visibleW: columns, visibleH: rows };
   }
   const displayAspect = boxWidth / boxHeight;
-  const canvasAspect = targetWidth / targetHeight;
-  if (canvasAspect >= displayAspect) {
-    const visibleH = targetWidth / displayAspect;
+  const gridAspect = columns / rows;
+  if (gridAspect >= displayAspect) {
+    const visibleH = columns / displayAspect;
     return {
       originX: 0,
-      originY: (targetHeight - visibleH) / 2,
-      visibleW: targetWidth,
+      originY: (rows - visibleH) / 2,
+      visibleW: columns,
       visibleH,
     };
   }
-  const visibleW = targetHeight * displayAspect;
+  const visibleW = rows * displayAspect;
   return {
-    originX: (targetWidth - visibleW) / 2,
+    originX: (columns - visibleW) / 2,
     originY: 0,
     visibleW,
-    visibleH: targetHeight,
+    visibleH: rows,
   };
 }
 
 export function clampViewport(
   viewport: Viewport,
-  targetWidth: number,
-  targetHeight: number
+  columns: number,
+  rows: number
 ): Viewport {
-  const loX = Math.min(0, targetWidth - viewport.visibleW);
-  const hiX = Math.max(0, targetWidth - viewport.visibleW);
-  const loY = Math.min(0, targetHeight - viewport.visibleH);
-  const hiY = Math.max(0, targetHeight - viewport.visibleH);
+  const loX = Math.min(0, columns - viewport.visibleW);
+  const hiX = Math.max(0, columns - viewport.visibleW);
+  const loY = Math.min(0, rows - viewport.visibleH);
+  const hiY = Math.max(0, rows - viewport.visibleH);
   return {
     ...viewport,
     originX: Math.max(loX, Math.min(hiX, viewport.originX)),
@@ -919,8 +1049,8 @@ export function clampViewport(
 
 export function transformViewport(
   viewport: Viewport,
-  targetWidth: number,
-  targetHeight: number,
+  columns: number,
+  rows: number,
   centroidX: number,
   centroidY: number,
   panX: number,
@@ -930,9 +1060,9 @@ export function transformViewport(
   boxHeight: number
 ): Viewport {
   if (boxWidth <= 0 || boxHeight <= 0) return viewport;
-  const fullVisibleW = fitViewport(targetWidth, targetHeight, boxWidth, boxHeight).visibleW;
+  const fullVisibleW = fitViewport(columns, rows, boxWidth, boxHeight).visibleW;
   const newVisibleW = Math.max(
-    MIN_VISIBLE_CANVAS,
+    MIN_VISIBLE_TILES,
     Math.min(fullVisibleW, viewport.visibleW / zoom)
   );
   const newVisibleH = (newVisibleW * boxHeight) / boxWidth;
@@ -944,10 +1074,10 @@ export function transformViewport(
     visibleW: newVisibleW,
     visibleH: newVisibleH,
   };
-  return clampViewport(next, targetWidth, targetHeight);
+  return clampViewport(next, columns, rows);
 }
 
-/* ==================== 浏览器 Canvas 解码与降采样 ==================== */
+/* ==================== 浏览器 Canvas 解码与图格重采样 ==================== */
 
 export async function loadSampledImageCanvas(file: Blob): Promise<HTMLCanvasElement> {
   const url = URL.createObjectURL(file);
@@ -1024,15 +1154,35 @@ function resampleCanvas(
   return current;
 }
 
+function buildSnappedCanvas(
+  base: HTMLCanvasElement,
+  columns: number,
+  rows: number
+): { canvas: HTMLCanvasElement; imageData: ImageData } {
+  const bctx = base.getContext('2d', { willReadFrequently: true })!;
+  const srcData = bctx.getImageData(0, 0, base.width, base.height);
+  const snapped = samplePixelGridFromRgba(srcData.data, base.width, base.height, columns, rows);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = columns;
+  canvas.height = rows;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+  const imageData = ctx.createImageData(columns, rows);
+  imageData.data.set(snapped);
+  ctx.putImageData(imageData, 0, 0);
+  return { canvas, imageData };
+}
+
 export function buildImagePlan(
   source: HTMLCanvasElement,
   mode: ScaleMode,
-  width: number,
-  height: number
+  columns: number,
+  rows: number,
+  sampleStyle: SampleStyle = 'smooth'
 ): ImagePlan {
   let base = source;
   if (mode === 'fill') {
-    const crop = centerCropRect(source.width, source.height, width, height);
+    const crop = centerCropRect(source.width, source.height, columns, rows);
     if (crop.right - crop.left !== source.width || crop.bottom - crop.top !== source.height) {
       const cropped = document.createElement('canvas');
       cropped.width = crop.right - crop.left;
@@ -1053,11 +1203,22 @@ export function buildImagePlan(
     }
   }
 
-  const [planW, planH] = planBitmapSize(width, height);
+  if (sampleStyle === 'pixel_snap' && (base.width !== columns || base.height !== rows)) {
+    const snapped = buildSnappedCanvas(base, columns, rows);
+    return {
+      canvas: snapped.canvas,
+      imageData: snapped.imageData,
+      mode,
+      sampleStyle,
+      columns,
+      rows,
+    };
+  }
+
   const canvas =
-    base.width === planW && base.height === planH
+    base.width === columns && base.height === rows
       ? base
-      : resampleCanvas(base, planW, planH);
+      : resampleCanvas(base, columns, rows);
   const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
@@ -1065,14 +1226,12 @@ export function buildImagePlan(
     canvas,
     imageData,
     mode,
-    targetWidth: width,
-    targetHeight: height,
-    columns: Math.ceil(width / TILE_SIZE),
-    rows: Math.ceil(height / TILE_SIZE),
+    sampleStyle,
+    columns,
+    rows,
   };
 }
 
-/** 将批量转换结果的 RGBA 数组写入离屏 Canvas，便于直接绘制在预览查看器中 */
 export function buildBatchPreviewCanvas(result: BatchConvertResult): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = result.columns;
@@ -1085,12 +1244,12 @@ export function buildBatchPreviewCanvas(result: BatchConvertResult): HTMLCanvasE
 }
 
 /** 生成带 10×10 加粗网格与坐标标尺的施工图纸 PNG Blob */
-export async function exportBlueprintPng(
-  previewCanvas: HTMLCanvasElement,
-  cellPx = 12
-): Promise<Blob> {
+export async function exportBlueprintPng(previewCanvas: HTMLCanvasElement): Promise<Blob> {
   const cols = previewCanvas.width;
   const rows = previewCanvas.height;
+  // 按画布大小自适应单格像素，避免大图超出浏览器 Canvas 尺寸上限
+  const maxDim = Math.max(cols, rows);
+  const cellPx = maxDim <= 400 ? 12 : maxDim <= 800 ? 8 : 4;
   const marginLeft = 40;
   const marginTop = 28;
   const width = marginLeft + cols * cellPx + 12;
@@ -1110,39 +1269,40 @@ export async function exportBlueprintPng(
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(previewCanvas, marginLeft, marginTop, cols * cellPx, rows * cellPx);
 
-  // 普通网格线
-  ctx.strokeStyle = 'rgba(255,255,255,0.18)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  for (let c = 0; c <= cols; c++) {
-    const x = marginLeft + c * cellPx + 0.5;
-    ctx.moveTo(x, marginTop);
-    ctx.lineTo(x, marginTop + rows * cellPx);
+  if (cellPx >= 6) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let c = 0; c <= cols; c++) {
+      const x = marginLeft + c * cellPx + 0.5;
+      ctx.moveTo(x, marginTop);
+      ctx.lineTo(x, marginTop + rows * cellPx);
+    }
+    for (let r = 0; r <= rows; r++) {
+      const y = marginTop + r * cellPx + 0.5;
+      ctx.moveTo(marginLeft, y);
+      ctx.lineTo(marginLeft + cols * cellPx, y);
+    }
+    ctx.stroke();
   }
-  for (let r = 0; r <= rows; r++) {
-    const y = marginTop + r * cellPx + 0.5;
-    ctx.moveTo(marginLeft, y);
-    ctx.lineTo(marginLeft + cols * cellPx, y);
-  }
-  ctx.stroke();
 
-  // 每 10 格加粗标线与标尺数字
   ctx.strokeStyle = 'rgba(115,156,191,0.85)';
   ctx.lineWidth = 1.5;
   ctx.fillStyle = '#4A3F3D';
   ctx.font = 'bold 10px monospace';
   ctx.textBaseline = 'middle';
 
+  const step = Math.max(cols, rows) > 400 ? 50 : 10;
   ctx.beginPath();
   ctx.textAlign = 'center';
-  for (let c = 0; c <= cols; c += 10) {
+  for (let c = 0; c <= cols; c += step) {
     const x = marginLeft + c * cellPx;
     ctx.moveTo(x, marginTop);
     ctx.lineTo(x, marginTop + rows * cellPx);
     if (c < cols) ctx.fillText(String(c), x + cellPx / 2, marginTop - 12);
   }
   ctx.textAlign = 'right';
-  for (let r = 0; r <= rows; r += 10) {
+  for (let r = 0; r <= rows; r += step) {
     const y = marginTop + r * cellPx;
     ctx.moveTo(marginLeft, y);
     ctx.lineTo(marginLeft + cols * cellPx, y);
