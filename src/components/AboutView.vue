@@ -48,7 +48,7 @@ const appVersion = __APP_VERSION__;
             </div>
 
             <a
-              href="https://github.com/akihofuyuka"
+              href="https://github.com/akihofuyuka/TerraFlora"
               target="_blank"
               rel="noopener noreferrer"
               class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-[#EADFD9] bg-white text-xs font-semibold text-[#739CBF] hover:bg-[#F9D6DB]/50 transition-colors shadow-2xs shrink-0 cursor-pointer ml-auto sm:ml-0"

@@ -11,7 +11,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)](https://www.typescriptlang.org/)
 [![Cloudflare Pages](https://img.shields.io/badge/Deploy-Cloudflare_Pages-orange.svg)](https://terraflora-8cm.pages.dev/)
 
-[在线访问](https://terraflora-8cm.pages.dev/) · [功能说明](#功能) · [存档路径](#默认存档路径) · [本地构建](#本地构建)
+[在线访问](https://terraflora-8cm.pages.dev/) · [GitHub 仓库](https://github.com/akihofuyuka/TerraFlora) · [功能说明](#功能) · [存档路径](#默认存档路径) · [本地构建](#本地构建)
 
 </div>
 
