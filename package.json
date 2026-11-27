@@ -1,11 +1,12 @@
 {
   "name": "terraflora",
   "private": true,
-  "version": "1.1.0",
+  "version": "1.1.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:guide": "vite build --config vite.guide.config.ts",
     "test": "vitest run",
     "preview": "vite preview",
     "extract:build": "node scripts/extract/build-from-dump.mjs",

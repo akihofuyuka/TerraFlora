@@ -9,10 +9,6 @@ const dontShowAgain = ref(true);
 function handleConfirm() {
   closeBackupNotice(dontShowAgain.value);
 }
-
-function handleDismissPermanently() {
-  closeBackupNotice(true);
-}
 </script>
 
 <template>
@@ -41,7 +37,7 @@ function handleDismissPermanently() {
               <span class="shrink-0 mt-0.5" :style="{ ...getItemSpriteStyle(3099, 16), imageRendering: 'pixelated' }"></span>
               <div>
                 <strong class="text-rose-700">务必提前备份原存档：</strong>
-                <p class="text-[#4A3F3D] mt-0.5">在导入或导出修改前，请<strong>务必复制并备份原有的 <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] font-mono text-[11px]">.plr</code> 文件</strong>（建议同时保留 <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] font-mono text-[11px]">.plr.bak</code> 备份文件）。</p>
+                <p class="text-[#4A3F3D] mt-0.5">在导入、修改或转换前，请<strong>务必复制并备份原有的人物（<code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] font-mono text-[11px]">.plr</code>）和地图（<code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] font-mono text-[11px]">.wld</code>）存档文件</strong>（建议同时保留对应的 <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] font-mono text-[11px]">.bak</code> 备份文件）。</p>
               </div>
             </div>
 

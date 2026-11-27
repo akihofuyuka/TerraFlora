@@ -6,7 +6,8 @@ import {
   loadPlrFile,
   createNewPlayer,
   deselectSlot,
-  cancelMoveMode
+  cancelMoveMode,
+  setActiveTool
 } from '@/store';
 import TopBar from '@/components/TopBar.vue';
 import TabNav from '@/components/TabNav.vue';
@@ -21,6 +22,7 @@ import ErrorModal from '@/components/ErrorModal.vue';
 
 const AboutView = defineAsyncComponent(() => import('@/components/AboutView.vue'));
 const PixelArtView = defineAsyncComponent(() => import('@/components/pixelart/PixelArtView.vue'));
+const GuideView = defineAsyncComponent(() => import('@/components/guide/GuideView.vue'));
 import {
   Drawer,
   DrawerContent,
@@ -79,6 +81,11 @@ function onFileSelected(e: Event) {
       <KeepAlive>
         <PixelArtView v-if="store.activeTool === 'pixelart'" />
       </KeepAlive>
+    </main>
+
+    <!-- 存档寻找向导与地图签名互转 -->
+    <main v-if="store.activeTool === 'guide'" class="max-w-6xl w-full mx-auto p-3 md:p-6 flex-1 flex flex-col">
+      <GuideView />
     </main>
 
     <!-- 独立关于页（未载入存档或从像素画工具点击关于时显示） -->
@@ -192,7 +199,7 @@ function onFileSelected(e: Event) {
         </Button>
 
         <div class="bg-[#F9D6DB]/35 border border-[#E598A3]/60 rounded-lg p-3 text-left text-xs text-[#4A3F3D] leading-relaxed">
-          如果你是在浏览器中使用本工具，且为 <strong>Android 11</strong> 及以上版本，请先将存档移动到浏览器可访问的目录（例如：<code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] font-mono text-[11px]">Download</code> 文件夹）。如果你找不到存档位置，可以访问：<a href="./guide/index.html" target="_blank" rel="noopener noreferrer" class="font-bold text-[#739CBF] hover:underline">存档寻找向导</a>。
+          如果你是在浏览器中使用本工具，且为 <strong>Android 11</strong> 及以上版本，请先将存档移动到浏览器可访问的目录（例如：<code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] font-mono text-[11px]">Download</code> 文件夹）。如果你找不到存档位置，可以访问：<button type="button" class="font-bold text-[#739CBF] hover:underline cursor-pointer" @click="setActiveTool('guide')">存档寻找向导</button>。
         </div>
 
         <div class="bg-[#FFF7F2] border border-[#EADFD9] rounded-lg p-3 text-left text-xs text-[#8E807C] flex flex-col gap-1">

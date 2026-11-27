@@ -73,14 +73,25 @@ export interface DragState {
   } | null;
 }
 
-export type ActiveTool = "plr" | "pixelart" | "about";
+export type ActiveTool = "plr" | "pixelart" | "guide" | "about";
+export type GuideSubTab = "path" | "converter";
 
 function detectInitialTool(): ActiveTool {
   if (typeof window === "undefined") return "plr";
   try {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("tool") === "pixelart" || window.location.hash === "#pixelart") {
+    const toolParam = params.get("tool");
+    const hash = window.location.hash;
+    if (toolParam === "pixelart" || hash === "#pixelart") {
       return "pixelart";
+    }
+    if (
+      toolParam === "guide" ||
+      toolParam === "map-converter" ||
+      hash === "#guide" ||
+      hash === "#map-converter"
+    ) {
+      return "guide";
     }
   } catch {
     // ignore
@@ -88,8 +99,26 @@ function detectInitialTool(): ActiveTool {
   return "plr";
 }
 
+function detectInitialGuideSubTab(): GuideSubTab {
+  if (typeof window === "undefined") return "path";
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (
+      params.get("tab") === "converter" ||
+      params.get("tool") === "map-converter" ||
+      window.location.hash === "#map-converter"
+    ) {
+      return "converter";
+    }
+  } catch {
+    // ignore
+  }
+  return "path";
+}
+
 export interface StoreState {
   activeTool: ActiveTool;
+  guideSubTab: GuideSubTab;
   player: PlayerData | null;
   fileName: string;
   isModified: boolean;
@@ -124,6 +153,7 @@ export interface StoreState {
 
 export const store = reactive<StoreState>({
   activeTool: detectInitialTool(),
+  guideSubTab: detectInitialGuideSubTab(),
   player: null,
   fileName: "character.plr",
   isModified: false,
@@ -314,6 +344,23 @@ export async function initData() {
   }
 }
 
+function syncToolHash(tool: ActiveTool, guideSubTab: GuideSubTab) {
+  if (typeof window === 'undefined') return;
+  try {
+    let targetHash = '';
+    if (tool === 'pixelart') {
+      targetHash = '#pixelart';
+    } else if (tool === 'guide') {
+      targetHash = guideSubTab === 'converter' ? '#map-converter' : '#guide';
+    }
+    if (window.location.hash !== targetHash) {
+      history.replaceState(null, '', targetHash || window.location.pathname + window.location.search);
+    }
+  } catch {
+    // ignore
+  }
+}
+
 export function setActiveTool(tool: ActiveTool) {
   store.activeTool = tool;
   if (tool === 'plr') {
@@ -326,15 +373,13 @@ export function setActiveTool(tool: ActiveTool) {
       // ignore
     }
   }
-  if (typeof window !== 'undefined') {
-    try {
-      const targetHash = tool === 'pixelart' ? '#pixelart' : '';
-      if (window.location.hash !== targetHash) {
-        history.replaceState(null, '', targetHash || window.location.pathname + window.location.search);
-      }
-    } catch {
-      // ignore
-    }
+  syncToolHash(tool, store.guideSubTab);
+}
+
+export function setGuideSubTab(tab: GuideSubTab) {
+  store.guideSubTab = tab;
+  if (store.activeTool === 'guide') {
+    syncToolHash('guide', tab);
   }
 }
 
