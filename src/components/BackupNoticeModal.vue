@@ -15,12 +15,11 @@ function handleConfirm() {
 <template>
   <AppModal
     :open="store.backupNoticeOpen"
-    title="备份提醒"
+    title="注意事项"
     max-width-class="max-w-md"
     body-class="p-3.5 overflow-y-auto overscroll-contain flex-1"
     z-index-class="z-[70]"
-    :show-close="false"
-    :close-on-overlay="false"
+    @close="closeBackupNotice(false)"
   >
     <template #icon>
       <div class="w-8 h-8 rounded-lg bg-[#F9D6DB] flex items-center justify-center shrink-0 border border-[#E598A3]">
@@ -28,29 +27,34 @@ function handleConfirm() {
       </div>
     </template>
 
-    <!-- 提示内容卡片 -->
-    <div class="bg-[#FFF7F2] border border-[#EADFD9] rounded-xl p-3.5 flex flex-col gap-2.5 text-xs text-[#4A3F3D] leading-relaxed">
+    <div class="bg-[#FFF7F2] border border-[#EADFD9] rounded-xl p-3.5 flex flex-col gap-3 text-xs text-[#4A3F3D] leading-relaxed">
       <div class="flex items-start gap-2">
         <span class="shrink-0 mt-0.5" :style="{ ...getItemSpriteStyle(3099, 16), imageRendering: 'pixelated' }"></span>
         <div>
-          <strong class="text-[#B84A5A]">务必提前备份原存档：</strong>
-          <p class="text-[#4A3F3D] mt-0.5">在导入、修改或转换前，请<strong>务必复制并备份原有的人物（<code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] font-mono text-[11px]">.plr</code>）和地图（<code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] font-mono text-[11px]">.wld</code>）存档文件</strong>（建议同时保留对应的 <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] font-mono text-[11px]">.bak</code> 备份文件）。</p>
+          <strong class="text-[#B84A5A]">提前备份并退回主页面：</strong>
+          <p class="text-[#5E504D] mt-0.5">
+            修改或转换 <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] font-mono text-[11px]">.plr</code> / <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] font-mono text-[11px]">.wld</code> 前，请先复制备份原文件（可连同 <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] font-mono text-[11px]">.bak</code> 一并保留），并确保游戏已退回主页面后再覆盖替换。
+          </p>
         </div>
       </div>
 
       <div class="flex items-start gap-2">
         <span class="shrink-0 mt-0.5" :style="{ ...getItemSpriteStyle(544, 16), imageRendering: 'pixelated' }"></span>
         <div>
-          <strong class="text-amber-800">部分操作属于暴力更改：</strong>
-          <p class="text-[#8E807C] mt-0.5">本工具支持国服/国际服签名互转、跨大版本格式转换、以及突破堆叠上限等操作。游戏客户端在加载未预期或异常格式数据时，可能会发生自动校验回滚或崩溃。</p>
+          <strong class="text-[#4A3F3D]">跨版本与修改风险：</strong>
+          <p class="text-[#8E807C] mt-0.5">
+            跨大版本降级、国服/国际服互转或非常规数值修改，可能触发游戏校验、清理不兼容物品或导致存档无法加载。
+          </p>
         </div>
       </div>
 
       <div class="flex items-start gap-2">
         <span class="shrink-0 mt-0.5" :style="{ ...getItemSpriteStyle(156, 16), imageRendering: 'pixelated' }"></span>
         <div>
-          <strong class="text-[#2F658D]">100% 纯本地离线运行：</strong>
-          <p class="text-[#8E807C] mt-0.5">所有加解密与二进制读写均在您的浏览器本地内存中完成，<strong>绝不向任何云端服务器上传您的存档</strong>，请放心使用。</p>
+          <strong class="text-[#2F658D]">纯本地处理：</strong>
+          <p class="text-[#8E807C] mt-0.5">
+            存档解析、签名转换与像素画计算均在浏览器本地完成，不会上传任何文件。
+          </p>
         </div>
       </div>
     </div>

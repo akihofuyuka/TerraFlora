@@ -21,7 +21,7 @@ async function handleCopy() {
 <template>
   <button
     type="button"
-    class="inline-flex items-center gap-1 px-1.5 py-0.5 my-0.5 rounded-md bg-white border border-[#C4D6E5] text-[#739CBF] hover:bg-[#EEF4F9] font-mono text-[11.5px] font-semibold align-baseline transition-all active:scale-95 cursor-pointer select-text"
+    class="inline-flex items-center gap-1 px-1.5 py-0.5 my-0.5 rounded-md bg-white border border-[#C4D6E5] text-[#2F658D] hover:bg-[#EEF4F9] font-mono text-[11.5px] font-semibold align-baseline transition-all active:scale-95 cursor-pointer select-text"
     :title="toastPrefix === 'Copied' ? 'Copy' : '复制'"
     @click="handleCopy"
   >
