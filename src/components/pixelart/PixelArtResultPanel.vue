@@ -100,7 +100,7 @@ function toggleIncludeCandidate(c: MatchCandidate) {
     >
       <div class="flex items-center gap-2.5 min-w-0">
         <div
-          class="w-9 h-9 rounded-full border-2 border-white shadow-xs shrink-0 ring-1 ring-[#EADFD9]"
+          class="w-9 h-9 rounded-lg border-2 border-white shadow-xs shrink-0 ring-1 ring-[#EADFD9]"
           :style="{ backgroundColor: `#${normalizedHex}` }"
         ></div>
         <div class="min-w-0">
@@ -155,8 +155,8 @@ function toggleIncludeCandidate(c: MatchCandidate) {
       <span>
         {{
           (options.filterMode ?? 'exclude') === 'include' && includedSet.size === 0
-            ? '自选清单为空，请点击上方「管理清单 / 导入导出」添加材料，或切回「全库排除」。'
-            : '当前筛选条件下无匹配结果，可尝试放开筛选条件或切换筛选模式。'
+            ? '自选清单为空，请点击「管理清单」添加材料，或切回「全库」。'
+            : '当前筛选条件下无匹配结果，可尝试放开筛选条件或切换材料池。'
         }}
       </span>
       <button
@@ -165,7 +165,7 @@ function toggleIncludeCandidate(c: MatchCandidate) {
         class="text-[11px] px-2.5 py-1 rounded-lg bg-white border border-[#EADFD9] text-[#4A3F3D] font-semibold hover:bg-[#F9D6DB]/40 cursor-pointer"
         @click="emit('update:options', { ...options, filterMode: 'exclude' })"
       >
-        切回全库排除
+        切回全库
       </button>
     </div>
 
@@ -185,12 +185,12 @@ function toggleIncludeCandidate(c: MatchCandidate) {
       >
         <!-- 目标对比色块 -->
         <div
-          class="w-7 h-7 rounded-full border border-[#EADFD9] shadow-2xs shrink-0"
+          class="w-7 h-7 rounded-lg border border-[#EADFD9] shadow-2xs shrink-0"
           :style="{ backgroundColor: `#${c.hex}` }"
         ></div>
 
         <!-- 游戏内物品与油漆贴图 -->
-        <div class="relative w-8 h-8 rounded-lg bg-[#FFF7F2] border border-[#EADFD9] flex items-center justify-center shrink-0">
+        <div class="relative w-8 h-8 rounded-lg bg-[#EFE7E2] border border-[#EADFD9] flex items-center justify-center shrink-0">
           <span :style="{ ...getItemSpriteStyle(c.material.itemId, 24), imageRendering: 'pixelated' }"></span>
           <span
             v-if="c.paintItemId"
@@ -211,7 +211,7 @@ function toggleIncludeCandidate(c: MatchCandidate) {
               :class="[
                 'text-[10px] px-1.5 py-0 rounded font-semibold shrink-0 border',
                 c.material.kind === 'tile'
-                  ? 'bg-[#739CBF]/10 text-[#2F658D] border-[#739CBF]/30'
+                  ? 'bg-[#EEF4F9] text-[#2F658D] border-[#C4D6E5]'
                   : 'bg-[#F9D6DB]/60 text-[#4A3F3D] border-[#E598A3]/50'
               ]"
             >

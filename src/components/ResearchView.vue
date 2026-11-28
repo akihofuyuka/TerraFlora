@@ -411,68 +411,71 @@ function getRarityColor(r: number) {
 
 <template>
   <div v-if="p" class="flex flex-col gap-4">
-    <!-- 非旅途模式提示 (引导一键切换) -->
-    <div
-      v-if="!isJourney"
-      class="p-2.5 rounded-xl bg-amber-50/90 border border-amber-200 text-[#4A3F3D] text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-xs"
-    >
-      <div class="flex items-center gap-2">
-        <span :style="{ ...getItemSpriteStyle(5011, 14), imageRendering: 'pixelated' }"></span>
-        <span class="font-medium">当前角色非旅途模式 ({{ p.difficulty === 0 ? '经典' : p.difficulty === 1 ? '中核' : '硬核' }})</span>
-      </div>
-      <Button
-        variant="outline"
-        size="sm"
-        class="h-7 text-xs font-semibold bg-white border-amber-300 text-amber-900 hover:bg-amber-100/60 shrink-0 self-start sm:self-auto"
-        @click="setJourney"
+    <!-- 顶部并排：非旅途模式提示 + 研究图鉴总览 -->
+    <div :class="['grid gap-3', !isJourney ? 'grid-cols-1 md:grid-cols-[minmax(210px,0.75fr)_1.4fr] items-stretch' : 'grid-cols-1']">
+      <!-- 非旅途模式提示 (引导一键切换) -->
+      <div
+        v-if="!isJourney"
+        class="p-3 rounded-xl bg-amber-50/90 border border-amber-200 text-[#4A3F3D] text-xs flex flex-row md:flex-col items-center md:items-start justify-between gap-2 shadow-2xs"
       >
-        切换为旅途模式
-      </Button>
-    </div>
-
-    <!-- 研究图鉴总览与一键控制卡片 (紧凑压缩结构) -->
-    <Card class="bg-white border-[#EADFD9] shadow-sm">
-      <CardHeader class="p-2.5 sm:p-3 pb-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div class="flex items-center gap-2">
-          <CardTitle class="text-xs font-bold text-[#4A3F3D] flex items-center gap-1.5">
-            <span :style="{ ...getItemSpriteStyle(149, 14), imageRendering: 'pixelated' }"></span>
-            <span>旅途物品复制图鉴</span>
-          </CardTitle>
-          <span class="text-[10px] font-mono font-bold text-[#739CBF] px-1.5 py-0.5 rounded bg-[#FFF7F2] border border-[#EADFD9]">
-            {{ researchedCount }} / {{ totalItemsCount }} ({{ progressPercent }}%)
-          </span>
+          <span class="shrink-0" :style="{ ...getItemSpriteStyle(5011, 14), imageRendering: 'pixelated' }"></span>
+          <span class="font-semibold">当前非旅途模式 ({{ p.difficulty === 0 ? '经典' : p.difficulty === 1 ? '中核' : '硬核' }})</span>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          class="h-7 text-xs font-semibold bg-white border-amber-300 text-amber-900 hover:bg-amber-100/60 shrink-0"
+          @click="setJourney"
+        >
+          切换为旅途模式
+        </Button>
+      </div>
 
-        <!-- 标题栏右侧操作按钮 -->
-        <div class="flex items-center gap-1.5 shrink-0">
-          <Button
-            variant="default"
-            size="xs"
-            class="h-6.5 text-xs font-semibold bg-[#739CBF] hover:bg-[#5f87a8] text-white shadow-2xs px-2.5"
-            @click="unlockAll"
-          >
-            一键全解锁
-          </Button>
-          <Button
-            variant="outline"
-            size="xs"
-            class="h-6.5 text-xs font-semibold border-[#EADFD9] text-[#8E807C] hover:text-[#4A3F3D] hover:bg-rose-50 hover:border-rose-200 px-2.5"
-            @click="clearAll"
-          >
-            清空所有研究
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent class="p-2.5 sm:p-3 pt-0">
-        <!-- 进度条 -->
-        <div class="w-full bg-[#EFE7E2] h-2 rounded-full overflow-hidden">
-          <div
-            class="bg-[#739CBF] h-full transition-all duration-300 rounded-full"
-            :style="{ width: `${progressPercent}%` }"
-          ></div>
-        </div>
-      </CardContent>
-    </Card>
+      <!-- 研究图鉴总览与一键控制卡片 (紧凑压缩结构) -->
+      <Card class="bg-white border-[#EADFD9] shadow-sm flex flex-col justify-between">
+        <CardHeader class="p-2.5 sm:p-3 pb-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <CardTitle class="text-xs font-bold text-[#4A3F3D] flex items-center gap-1.5">
+              <span :style="{ ...getItemSpriteStyle(149, 14), imageRendering: 'pixelated' }"></span>
+              <span>旅途物品复制图鉴</span>
+            </CardTitle>
+            <span class="text-[10px] font-mono font-bold text-[#739CBF] px-1.5 py-0.5 rounded bg-[#FFF7F2] border border-[#EADFD9]">
+              {{ researchedCount }} / {{ totalItemsCount }} ({{ progressPercent }}%)
+            </span>
+          </div>
+
+          <!-- 标题栏右侧操作按钮 -->
+          <div class="flex items-center gap-1.5 shrink-0">
+            <Button
+              variant="default"
+              size="xs"
+              class="h-6.5 text-xs font-semibold bg-[#739CBF] hover:bg-[#5f87a8] text-white shadow-2xs px-2.5"
+              @click="unlockAll"
+            >
+              一键全解锁
+            </Button>
+            <Button
+              variant="outline"
+              size="xs"
+              class="h-6.5 text-xs font-semibold btn-danger-soft px-2.5"
+              @click="clearAll"
+            >
+              清空所有研究
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent class="p-2.5 sm:p-3 pt-0">
+          <!-- 进度条 -->
+          <div class="w-full bg-[#EFE7E2] h-2 rounded-full overflow-hidden">
+            <div
+              class="bg-[#739CBF] h-full transition-all duration-300 rounded-full"
+              :style="{ width: `${progressPercent}%` }"
+            ></div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
 
     <!-- 旅途专属特权与世界调控 (支持折叠) -->
     <Card class="bg-white border-[#EADFD9] shadow-sm">
@@ -592,9 +595,9 @@ function getRarityColor(r: number) {
               v-for="cat in categories"
               :key="cat.id"
               :class="[
-                'text-[10px] px-2 py-0.5 rounded font-semibold border transition-all cursor-pointer whitespace-nowrap',
+                'text-[11px] px-2 py-0.5 rounded-lg font-semibold border transition-all cursor-pointer whitespace-nowrap',
                 selectedCat === cat.id
-                  ? 'bg-[#739CBF] text-white border-[#739CBF]'
+                  ? 'bg-[#EEF4F9] text-[#2F658D] border-[#C4D6E5]'
                   : 'bg-[#FFF7F2] text-[#4A3F3D] border-[#EADFD9] hover:bg-[#EFE7E2]'
               ]"
               @click="selectedCat = cat.id"
@@ -614,9 +617,9 @@ function getRarityColor(r: number) {
               ]"
               :key="s.id"
               :class="[
-                'text-[10px] px-2 py-0.5 rounded font-semibold border transition-all cursor-pointer whitespace-nowrap',
+                'text-[11px] px-2 py-0.5 rounded-lg font-semibold border transition-all cursor-pointer whitespace-nowrap',
                 filterStatus === s.id
-                  ? 'bg-[#F9D6DB] text-[#4A3F3D] border-[#E598A3]'
+                  ? 'bg-[#F9D6DB]/70 text-[#4A3F3D] border-[#E598A3]/70'
                   : 'bg-[#FFF7F2] text-[#8E807C] border-[#EADFD9] hover:bg-[#EFE7E2]'
               ]"
               @click="filterStatus = s.id"
@@ -663,7 +666,7 @@ function getRarityColor(r: number) {
                     <!-- 进度徽章 -->
                     <span
                       v-if="isUnlocked"
-                      class="text-[9px] px-1 py-0.2 rounded bg-emerald-100 text-emerald-800 font-semibold"
+                      class="text-[10px] px-1.5 py-0.2 rounded-md bg-[#EEF5F1] text-[#3F6D57] border border-[#CFE0D6] font-semibold"
                     >
                       已解锁
                     </span>
@@ -727,7 +730,7 @@ function getRarityColor(r: number) {
                 </button>
                 <button
                   v-else
-                  class="h-6 px-2 text-[10px] font-semibold rounded border border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 transition-colors cursor-pointer"
+                  class="h-6 px-2 text-[10px] font-semibold rounded-md border border-[#CFE0D6] bg-[#EEF5F1] text-[#3F6D57] hover:bg-[#CFE0D6]/50 transition-colors cursor-pointer"
                   @click="resetItemResearch(item)"
                 >
                   已解锁 (重置)

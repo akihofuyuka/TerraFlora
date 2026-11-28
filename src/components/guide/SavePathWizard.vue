@@ -17,8 +17,8 @@ import {
   SlidersHorizontal,
   Smartphone,
   Wand2,
-  X,
 } from 'lucide-vue-next';
+import AppModal from '@/components/ui/AppModal.vue';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { setActiveTool, setGuideSubTab, showToast } from '@/store';
@@ -51,6 +51,14 @@ function openPlrEditor() {
     window.open('https://terraflora-8cm.pages.dev/', '_blank', 'noopener,noreferrer');
   } else {
     setActiveTool('plr');
+  }
+}
+
+function openWorldTool() {
+  if (props.standalone) {
+    setGuideSubTab('converter');
+  } else {
+    setActiveTool('wld');
   }
 }
 
@@ -225,7 +233,7 @@ const copyPrefix = computed(() => (isZh.value ? '已复制' : 'Copied'));
     <Card v-if="currentStep === 'start'" class="bg-white border-[#EADFD9] animate-in fade-in-0 duration-150">
       <CardContent class="p-5">
         <div class="mb-2.5">
-          <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-[11.5px] font-semibold bg-[#FFF7F2] border border-[#EADFD9] text-[#5E504D]">
+          <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-[11.5px] font-semibold bg-[#F9D6DB]/45 border border-[#E598A3]/50 text-[#4A3F3D]">
             {{ isZh ? '第 1 步 · 确认平台与版本' : 'Step 1 · Choose Platform & Edition' }}
           </span>
         </div>
@@ -239,14 +247,14 @@ const copyPrefix = computed(() => (isZh.value ? '已复制' : 'Copied'));
             class="w-full text-left p-3.5 rounded-xl bg-[#FFF7F2] border border-[#EADFD9] hover:bg-[#F9D6DB]/40 hover:border-[#E598A3] flex items-center justify-between gap-3 transition-all active:scale-[0.99] cursor-pointer"
             @click="selectPlatform('mobile', 'xd')"
           >
-            <div class="flex items-start gap-3">
+            <div class="flex items-center gap-3">
               <div class="w-9 h-9 rounded-lg bg-white border border-[#EADFD9] flex items-center justify-center text-[#5E504D] shrink-0">
                 <GuideIcon :item-id="58" :size="20" :standalone="standalone">
                   <Heart class="w-[18px] h-[18px]" />
                 </GuideIcon>
               </div>
               <div>
-                <div class="text-[14.5px] font-bold text-[#4A3F3D]">
+                <div class="text-sm font-bold text-[#4A3F3D]">
                   {{ isZh ? '手机心动版' : 'Mobile: TapTap / XD Edition' }}
                 </div>
                 <div class="text-xs text-[#8E807C] mt-0.5">
@@ -262,14 +270,14 @@ const copyPrefix = computed(() => (isZh.value ? '已复制' : 'Copied'));
             class="w-full text-left p-3.5 rounded-xl bg-[#FFF7F2] border border-[#EADFD9] hover:bg-[#F9D6DB]/40 hover:border-[#E598A3] flex items-center justify-between gap-3 transition-all active:scale-[0.99] cursor-pointer"
             @click="selectPlatform('mobile', 'normal')"
           >
-            <div class="flex items-start gap-3">
+            <div class="flex items-center gap-3">
               <div class="w-9 h-9 rounded-lg bg-white border border-[#EADFD9] flex items-center justify-center text-[#5E504D] shrink-0">
                 <GuideIcon :item-id="393" :size="20" :standalone="standalone">
                   <Globe class="w-[18px] h-[18px]" />
                 </GuideIcon>
               </div>
               <div>
-                <div class="text-[14.5px] font-bold text-[#4A3F3D]">
+                <div class="text-sm font-bold text-[#4A3F3D]">
                   {{ isZh ? '手机国际版' : 'Mobile: Global Edition' }}
                 </div>
                 <div class="text-xs text-[#8E807C] mt-0.5">
@@ -285,14 +293,14 @@ const copyPrefix = computed(() => (isZh.value ? '已复制' : 'Copied'));
             class="w-full text-left p-3.5 rounded-xl bg-[#FFF7F2] border border-[#EADFD9] hover:bg-[#F9D6DB]/40 hover:border-[#E598A3] flex items-center justify-between gap-3 transition-all active:scale-[0.99] cursor-pointer"
             @click="selectPlatform('pc')"
           >
-            <div class="flex items-start gap-3">
+            <div class="flex items-center gap-3">
               <div class="w-9 h-9 rounded-lg bg-white border border-[#EADFD9] flex items-center justify-center text-[#5E504D] shrink-0">
                 <GuideIcon :item-id="395" :size="20" :standalone="standalone">
                   <Monitor class="w-[18px] h-[18px]" />
                 </GuideIcon>
               </div>
               <div>
-                <div class="text-[14.5px] font-bold text-[#4A3F3D]">
+                <div class="text-sm font-bold text-[#4A3F3D]">
                   {{ isZh ? '电脑 Steam 版' : 'PC: Steam Edition' }}
                 </div>
                 <div class="text-xs text-[#8E807C] mt-0.5">
@@ -324,14 +332,14 @@ const copyPrefix = computed(() => (isZh.value ? '已复制' : 'Copied'));
             class="w-full text-left p-3.5 rounded-xl bg-[#FFF7F2] border border-[#EADFD9] hover:bg-[#F9D6DB]/40 hover:border-[#E598A3] flex items-center justify-between gap-3 transition-all active:scale-[0.99] cursor-pointer"
             @click="selectOS('android')"
           >
-            <div class="flex items-start gap-3">
+            <div class="flex items-center gap-3">
               <div class="w-9 h-9 rounded-lg bg-white border border-[#EADFD9] flex items-center justify-center text-[#5E504D] shrink-0">
                 <GuideIcon :item-id="3124" :size="20" :standalone="standalone">
                   <Smartphone class="w-[18px] h-[18px]" />
                 </GuideIcon>
               </div>
               <div>
-                <div class="text-[14.5px] font-bold text-[#4A3F3D]">
+                <div class="text-sm font-bold text-[#4A3F3D]">
                   {{ isZh ? '安卓 / 鸿蒙手机' : 'Android / HarmonyOS' }}
                 </div>
                 <div class="text-xs text-[#8E807C] mt-0.5">
@@ -347,14 +355,14 @@ const copyPrefix = computed(() => (isZh.value ? '已复制' : 'Copied'));
             class="w-full text-left p-3.5 rounded-xl bg-[#FFF7F2] border border-[#EADFD9] hover:bg-[#F9D6DB]/40 hover:border-[#E598A3] flex items-center justify-between gap-3 transition-all active:scale-[0.99] cursor-pointer"
             @click="selectOS('ios')"
           >
-            <div class="flex items-start gap-3">
+            <div class="flex items-center gap-3">
               <div class="w-9 h-9 rounded-lg bg-white border border-[#EADFD9] flex items-center justify-center text-[#5E504D] shrink-0">
                 <GuideIcon :item-id="4009" :size="20" :standalone="standalone">
                   <Smartphone class="w-[18px] h-[18px]" />
                 </GuideIcon>
               </div>
               <div>
-                <div class="text-[14.5px] font-bold text-[#4A3F3D]">
+                <div class="text-sm font-bold text-[#4A3F3D]">
                   {{ isZh ? '苹果（iOS / iPadOS）' : 'Apple (iOS / iPadOS)' }}
                 </div>
                 <div class="text-xs text-[#8E807C] mt-0.5">
@@ -386,14 +394,14 @@ const copyPrefix = computed(() => (isZh.value ? '已复制' : 'Copied'));
             class="w-full text-left p-3.5 rounded-xl bg-[#FFF7F2] border border-[#EADFD9] hover:bg-[#F9D6DB]/40 hover:border-[#E598A3] flex items-center justify-between gap-3 transition-all active:scale-[0.99] cursor-pointer"
             @click="selectGoal('save')"
           >
-            <div class="flex items-start gap-3">
+            <div class="flex items-center gap-3">
               <div class="w-9 h-9 rounded-lg bg-white border border-[#EADFD9] flex items-center justify-center text-[#5E504D] shrink-0">
                 <GuideIcon :item-id="48" :size="20" :standalone="standalone">
                   <Folder class="w-[18px] h-[18px]" />
                 </GuideIcon>
               </div>
               <div>
-                <div class="text-[14.5px] font-bold text-[#4A3F3D]">
+                <div class="text-sm font-bold text-[#4A3F3D]">
                   {{ isZh ? '导入 / 导出人物或地图存档' : 'Import / Export Saves (Worlds & Characters)' }}
                 </div>
                 <div class="text-xs text-[#8E807C] mt-0.5">
@@ -409,14 +417,14 @@ const copyPrefix = computed(() => (isZh.value ? '已复制' : 'Copied'));
             class="w-full text-left p-3.5 rounded-xl bg-[#FFF7F2] border border-[#EADFD9] hover:bg-[#F9D6DB]/40 hover:border-[#E598A3] flex items-center justify-between gap-3 transition-all active:scale-[0.99] cursor-pointer"
             @click="selectGoal('patch')"
           >
-            <div class="flex items-start gap-3">
+            <div class="flex items-center gap-3">
               <div class="w-9 h-9 rounded-lg bg-white border border-[#EADFD9] flex items-center justify-center text-[#5E504D] shrink-0">
                 <GuideIcon :item-id="4722" :size="20" :standalone="standalone">
                   <Wand2 class="w-[18px] h-[18px]" />
                 </GuideIcon>
               </div>
               <div>
-                <div class="text-[14.5px] font-bold text-[#4A3F3D] flex items-center flex-wrap gap-1.5">
+                <div class="text-sm font-bold text-[#4A3F3D] flex items-center flex-wrap gap-1.5">
                   <span>{{ isZh ? '安装第一分型等游戏补丁' : 'Install Game Patches (First Fractal, etc.)' }}</span>
                   <span
                     v-if="state.os !== 'android'"
@@ -442,14 +450,14 @@ const copyPrefix = computed(() => (isZh.value ? '已复制' : 'Copied'));
             class="w-full text-left p-3.5 rounded-xl bg-[#FFF7F2] border border-[#EADFD9] hover:bg-[#F9D6DB]/40 hover:border-[#E598A3] flex items-center justify-between gap-3 transition-all active:scale-[0.99] cursor-pointer"
             @click="selectGoal('editor')"
           >
-            <div class="flex items-start gap-3">
+            <div class="flex items-center gap-3">
               <div class="w-9 h-9 rounded-lg bg-white border border-[#EADFD9] flex items-center justify-center text-[#5E504D] shrink-0">
                 <GuideIcon :item-id="509" :size="20" :standalone="standalone">
                   <SlidersHorizontal class="w-[18px] h-[18px]" />
                 </GuideIcon>
               </div>
               <div>
-                <div class="text-[14.5px] font-bold text-[#4A3F3D]">
+                <div class="text-sm font-bold text-[#4A3F3D]">
                   {{ isZh ? '使用存档编辑器修改物品/属性' : 'Use Save Editor (Modify Items & Stats)' }}
                 </div>
                 <div class="text-xs text-[#8E807C] mt-0.5">
@@ -485,14 +493,14 @@ const copyPrefix = computed(() => (isZh.value ? '已复制' : 'Copied'));
             class="w-full text-left p-3.5 rounded-xl bg-[#FFF7F2] border border-[#EADFD9] hover:bg-[#F9D6DB]/40 hover:border-[#E598A3] flex items-center justify-between gap-3 transition-all active:scale-[0.99] cursor-pointer"
             @click="selectPcGoal('save')"
           >
-            <div class="flex items-start gap-3">
+            <div class="flex items-center gap-3">
               <div class="w-9 h-9 rounded-lg bg-white border border-[#EADFD9] flex items-center justify-center text-[#5E504D] shrink-0">
                 <GuideIcon :item-id="48" :size="20" :standalone="standalone">
                   <Folder class="w-[18px] h-[18px]" />
                 </GuideIcon>
               </div>
               <div>
-                <div class="text-[14.5px] font-bold text-[#4A3F3D]">
+                <div class="text-sm font-bold text-[#4A3F3D]">
                   {{ isZh ? '导入 / 导出人物或地图存档' : 'Import / Export Saves' }}
                 </div>
                 <div class="text-xs text-[#8E807C] mt-0.5">
@@ -508,14 +516,14 @@ const copyPrefix = computed(() => (isZh.value ? '已复制' : 'Copied'));
             class="w-full text-left p-3.5 rounded-xl bg-[#FFF7F2] border border-[#EADFD9] hover:bg-[#F9D6DB]/40 hover:border-[#E598A3] flex items-center justify-between gap-3 transition-all active:scale-[0.99] cursor-pointer"
             @click="selectPcGoal('editor')"
           >
-            <div class="flex items-start gap-3">
+            <div class="flex items-center gap-3">
               <div class="w-9 h-9 rounded-lg bg-white border border-[#EADFD9] flex items-center justify-center text-[#5E504D] shrink-0">
                 <GuideIcon :item-id="509" :size="20" :standalone="standalone">
                   <SlidersHorizontal class="w-[18px] h-[18px]" />
                 </GuideIcon>
               </div>
               <div>
-                <div class="text-[14.5px] font-bold text-[#4A3F3D]">
+                <div class="text-sm font-bold text-[#4A3F3D]">
                   {{ isZh ? '使用存档编辑器修改物品/属性' : 'Use Save Editor (Edit Items & Stats)' }}
                 </div>
                 <div class="text-xs text-[#8E807C] mt-0.5">
@@ -531,14 +539,14 @@ const copyPrefix = computed(() => (isZh.value ? '已复制' : 'Copied'));
             class="w-full text-left p-3.5 rounded-xl bg-[#FFF7F2] border border-[#EADFD9] hover:bg-[#F9D6DB]/40 hover:border-[#E598A3] flex items-center justify-between gap-3 transition-all active:scale-[0.99] cursor-pointer"
             @click="selectPcGoal('mod')"
           >
-            <div class="flex items-start gap-3">
+            <div class="flex items-center gap-3">
               <div class="w-9 h-9 rounded-lg bg-white border border-[#EADFD9] flex items-center justify-center text-[#5E504D] shrink-0">
                 <GuideIcon :item-id="757" :size="20" :standalone="standalone">
                   <Wand2 class="w-[18px] h-[18px]" />
                 </GuideIcon>
               </div>
               <div>
-                <div class="text-[14.5px] font-bold text-[#4A3F3D]">
+                <div class="text-sm font-bold text-[#4A3F3D]">
                   {{ isZh ? '安装 MOD（tModLoader）' : 'Install Mods (tModLoader)' }}
                 </div>
                 <div class="text-xs text-[#8E807C] mt-0.5">
@@ -791,13 +799,13 @@ const copyPrefix = computed(() => (isZh.value ? '已复制' : 'Copied'));
               }}
             </div>
             <div class="mt-2 pt-2 border-t border-[#C4D6E5]/70 flex items-center justify-between gap-2 flex-wrap">
-              <span>{{ isZh ? '导入手机心动版地图显示不了？可用「地图签名互转」转换。' : 'World from mobile XD edition not loading? Convert its signature.' }}</span>
+              <span>{{ isZh ? '导入手机心动版地图显示不了？可用「地图存档」转换签名。' : 'World from mobile XD edition not loading? Convert its signature.' }}</span>
               <button
                 type="button"
                 class="font-bold text-[#739CBF] hover:underline cursor-pointer"
-                @click="setGuideSubTab('converter')"
+                @click="openWorldTool"
               >
-                {{ isZh ? '前往地图签名互转 →' : 'Open Map Converter →' }}
+                {{ isZh ? '前往地图存档 →' : 'Open World Tool →' }}
               </button>
             </div>
           </div>
@@ -936,14 +944,14 @@ const copyPrefix = computed(() => (isZh.value ? '已复制' : 'Copied'));
             class="w-full text-left p-3.5 rounded-xl bg-[#FFF7F2] border border-[#EADFD9] hover:bg-[#F9D6DB]/40 hover:border-[#E598A3] flex items-center justify-between gap-3 transition-all active:scale-[0.99] cursor-pointer"
             @click="selectDataPerm(true)"
           >
-            <div class="flex items-start gap-3">
+            <div class="flex items-center gap-3">
               <div class="w-9 h-9 rounded-lg bg-white border border-[#EADFD9] flex items-center justify-center text-[#5E504D] shrink-0">
                 <GuideIcon :item-id="327" :size="20" :standalone="standalone">
                   <Check class="w-[18px] h-[18px]" />
                 </GuideIcon>
               </div>
               <div>
-                <div class="text-[14.5px] font-bold text-[#4A3F3D]">
+                <div class="text-sm font-bold text-[#4A3F3D]">
                   {{ isZh ? '能正常看到里面的一堆文件夹' : 'I can see all package folders normally' }}
                 </div>
                 <div class="text-xs text-[#8E807C] mt-0.5">
@@ -959,14 +967,14 @@ const copyPrefix = computed(() => (isZh.value ? '已复制' : 'Copied'));
             class="w-full text-left p-3.5 rounded-xl bg-[#FFF7F2] border border-[#EADFD9] hover:bg-[#F9D6DB]/40 hover:border-[#E598A3] flex items-center justify-between gap-3 transition-all active:scale-[0.99] cursor-pointer"
             @click="selectDataPerm(false)"
           >
-            <div class="flex items-start gap-3">
+            <div class="flex items-center gap-3">
               <div class="w-9 h-9 rounded-lg bg-white border border-[#EADFD9] flex items-center justify-center text-[#5E504D] shrink-0">
                 <GuideIcon :item-id="329" :size="20" :standalone="standalone">
                   <Lock class="w-[18px] h-[18px]" />
                 </GuideIcon>
               </div>
               <div>
-                <div class="text-[14.5px] font-bold text-[#4A3F3D]">
+                <div class="text-sm font-bold text-[#4A3F3D]">
                   {{ isZh ? '提示“没有权限”或显示为空' : 'Shows "Access Denied" or appears empty' }}
                 </div>
                 <div class="text-xs text-[#8E807C] mt-0.5">
@@ -1303,13 +1311,13 @@ const copyPrefix = computed(() => (isZh.value ? '已复制' : 'Copied'));
               </template>
             </div>
             <div class="mt-2 pt-2 border-t border-[#C4D6E5]/70 flex items-center justify-between gap-2 flex-wrap">
-              <span>{{ isZh ? '国服 / 国际服地图不互通？可用「地图签名互转」转换。' : 'Map edition mismatch (XD / Global)? Convert its signature.' }}</span>
+              <span>{{ isZh ? '国服 / 国际服地图不互通？可用「地图存档」转换签名。' : 'Map edition mismatch (XD / Global)? Convert its signature.' }}</span>
               <button
                 type="button"
                 class="font-bold text-[#739CBF] hover:underline cursor-pointer"
-                @click="setGuideSubTab('converter')"
+                @click="openWorldTool"
               >
-                {{ isZh ? '前往地图签名互转 →' : 'Open Map Converter →' }}
+                {{ isZh ? '前往地图存档 →' : 'Open World Tool →' }}
               </button>
             </div>
           </div>
@@ -1519,13 +1527,13 @@ const copyPrefix = computed(() => (isZh.value ? '已复制' : 'Copied'));
               </template>
             </div>
             <div class="mt-2 pt-2 border-t border-[#ecd2d5]/70 flex items-center justify-between gap-2 flex-wrap">
-              <span>{{ isZh ? '国服 / 国际服地图不互通？可用「地图签名互转」转换。' : 'Map edition mismatch (XD / Global)? Convert its signature.' }}</span>
+              <span>{{ isZh ? '国服 / 国际服地图不互通？可用「地图存档」转换签名。' : 'Map edition mismatch (XD / Global)? Convert its signature.' }}</span>
               <button
                 type="button"
                 class="font-bold text-[#739CBF] hover:underline cursor-pointer"
-                @click="setGuideSubTab('converter')"
+                @click="openWorldTool"
               >
-                {{ isZh ? '前往地图签名互转 →' : 'Open Map Converter →' }}
+                {{ isZh ? '前往地图存档 →' : 'Open World Tool →' }}
               </button>
             </div>
           </div>
@@ -1574,121 +1582,85 @@ const copyPrefix = computed(() => (isZh.value ? '已复制' : 'Copied'));
     </Card>
 
     <!-- 常见排查弹窗 -->
-    <Teleport to="body">
-      <div
-        v-if="troubleshootOpen"
-        class="fixed inset-0 z-[70] flex items-end sm:items-center justify-center sm:p-4 bg-black/40 backdrop-blur-sm"
-        @click.self="troubleshootOpen = false"
-      >
-        <div class="bg-white rounded-t-2xl sm:rounded-2xl border border-[#EADFD9] shadow-2xl max-w-lg w-full max-h-[84vh] flex flex-col overflow-hidden text-[#4A3F3D]">
-          <div class="px-4 py-3.5 border-b border-[#EADFD9] flex items-center justify-between">
-            <span class="font-bold text-sm text-[#4A3F3D]">
-              {{ isZh ? '常见报错与疑难排查' : 'Frequently Asked Questions & Troubleshooting' }}
-            </span>
-            <button
-              type="button"
-              class="p-1 text-[#8E807C] hover:text-[#4A3F3D] cursor-pointer"
-              :aria-label="isZh ? '关闭' : 'Close'"
-              @click="troubleshootOpen = false"
-            >
-              <X class="w-4 h-4" />
-            </button>
-          </div>
-
-          <div class="p-4 overflow-y-auto flex flex-col gap-3 text-xs text-[#5E504D] leading-relaxed">
-            <div class="p-3 rounded-lg bg-[#FFF7F2] border border-[#EADFD9]">
-              <div class="font-bold text-[#4A3F3D] mb-1">
-                {{ isZh ? '1. 找不到一串数字的心动ID文件夹？（或国际版没有数字文件夹？）' : '1. Can\'t find the numeric XD ID folder? (Or no numeric folder in Global edition?)' }}
-              </div>
-              <template v-if="isZh">
-                • <strong class="text-[#3f6d57]">心动版</strong>：必须先上游戏登录账号，在存档界面把云存档<strong class="text-[#4A3F3D]">下载到本地</strong>（或新建一个本地角色/地图），才会生成数字 ID 文件夹。<br />
-                • <strong class="text-[#739CBF]">国际版</strong>：本身就<strong class="text-[#4A3F3D]">没有数字 ID 文件夹</strong>！点进游戏目录后直接就是 <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">Players</code> 和 <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">Worlds</code>。
-              </template>
-              <template v-else>
-                • <strong class="text-[#3f6d57]">XD Edition (TapTap)</strong>: You must launch the game, log into your account, and in the save interface, <strong class="text-[#4A3F3D]">download your cloud save to local</strong> (or create a new local character/world) to generate the numeric ID folder.<br />
-                • <strong class="text-[#739CBF]">Global Edition</strong>: By design, it <strong class="text-[#4A3F3D]">DOES NOT have a numeric ID folder</strong>! Open the game folder and you will directly see <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">Players</code> and <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">Worlds</code>.
-              </template>
-            </div>
-
-            <div class="p-3 rounded-lg bg-[#FFF7F2] border border-[#EADFD9]">
-              <div class="font-bold text-[#9a4f56] mb-1">
-                {{ isZh ? '2. 覆盖补丁后打开游戏闪退 / 黑屏？' : '2. Game crashes or black screen after replacing patch files?' }}
-              </div>
-              <template v-if="isZh">
-                100% 是<strong class="text-[#4A3F3D]">补丁版本与当前游戏版本号不一致</strong>（例如游戏更新了但补丁还是老版本）。请确认补丁适配的最新版本号，或卸载重装游戏恢复原文件。
-              </template>
-              <template v-else>
-                100% caused by <strong class="text-[#4A3F3D]">a version mismatch between the patch and the game</strong> (e.g., game was updated but the patch is for an older version). Please verify the game version supported by the patch, or reinstall the game to restore clean files.
-              </template>
-            </div>
-
-            <div class="p-3 rounded-lg bg-[#FFF7F2] border border-[#EADFD9]">
-              <div class="font-bold text-[#739CBF] mb-1">
-                {{ isZh ? '3. 放了存档但进游戏看不到？' : '3. Placed save files but cannot see them in-game?' }}
-              </div>
-              <template v-if="isZh">
-                检查三点：① 没有误放进 <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">OldSaves</code> 文件夹；② 地图（<code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">.wld</code>）必须放 <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">Worlds/world</code>，人物（<code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">.plr</code>）必须放 <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">Players/player</code>；③ 彻底划掉游戏后台再重进。
-              </template>
-              <template v-else>
-                Check three points: ① Never place files in the <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">OldSaves</code> folder; ② Worlds (<code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">.wld</code>) must go into <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">Worlds/world</code>, Characters (<code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">.plr</code>) into <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">Players/player</code>; ③ Completely swipe away the game from recent apps and restart it.
-              </template>
-            </div>
-
-            <div class="p-3 rounded-lg bg-[#FFF7F2] border border-[#EADFD9]">
-              <div class="font-bold text-[#8a6526] mb-1">
-                {{ isZh ? '4. 数据线连上电脑，Android/data 里是空的？' : '4. Connected phone to PC via USB, but Android/data is empty?' }}
-              </div>
-              <template v-if="isZh">
-                安卓 11 起系统会挡住电脑对 <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">Android/data</code> 的访问，看到空文件夹是正常的。把文件先复制到手机 <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">Download</code> 文件夹，再用手机上的文件管理器移进游戏目录；文件管理器进不去 data 的话，按权限检测那一步用 Shizuku 授权。
-              </template>
-              <template v-else>
-                Since Android 11, the OS blocks computer access to <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">Android/data</code>, so seeing an empty folder is normal. Copy files into your phone's <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">Download</code> folder first, then use a phone file manager (like MT Manager) to move them into the game folder. If data is inaccessible, grant permission via Shizuku.
-              </template>
-            </div>
-
-            <div class="p-3 rounded-lg bg-[#FFF7F2] border border-[#EADFD9]">
-              <div class="font-bold text-[#5d5a86] mb-1">
-                {{ isZh ? '5. iPhone 连电脑后，访达 / iTunes 里没有泰拉瑞亚？' : '5. Connected iPhone to PC, but Terraria doesn\'t show in Finder / iTunes?' }}
-              </div>
-              <template v-if="isZh">
-                先解锁手机并在弹窗里点<strong class="text-[#4A3F3D]">信任</strong>；macOS 在访达里选设备后切到<strong class="text-[#4A3F3D]">文件</strong>标签，Windows 需要装 iTunes 或「Apple 设备」App 并打开<strong class="text-[#4A3F3D]">文件共享</strong>。列表里只显示支持文档管理的 App。
-              </template>
-              <template v-else>
-                Unlock your iPhone and tap <strong class="text-[#4A3F3D]">Trust</strong> on the prompt. On macOS, select your device in Finder and click the <strong class="text-[#4A3F3D]">Files</strong> tab. On Windows, install iTunes or Apple Devices app and open <strong class="text-[#4A3F3D]">File Sharing</strong>. Only apps supporting document storage will be listed.
-              </template>
-            </div>
-
-            <div class="p-3 rounded-lg bg-[#FFF7F2] border border-[#EADFD9]">
-              <div class="font-bold text-[#5d5a86] mb-1">
-                {{ isZh ? '6. 如何通过后缀区分存档文件？' : '6. How to identify save files by extension?' }}
-              </div>
-              • <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">.wld</code> = {{ isZh ? '地图存档（放 Worlds / world）' : 'World save (place in Worlds / world)' }}<br />
-              • <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">.plr</code> = {{ isZh ? '人物存档（放 Players / player）' : 'Character save (place in Players / player)' }}<br />
-              • <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">.bak / .bak2</code> = {{ isZh ? '自动备份（删掉 .bak 后缀即可当正式存档）' : 'Automatic backups (delete .bak extension to use as a live save)' }}<br />
-              • <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">global-metadata.dat</code> = {{ isZh ? '游戏底层补丁（仅安卓可用）' : 'Core engine patch (Android only)' }}
-            </div>
-          </div>
-
-          <div class="px-4 py-3 border-t border-[#EADFD9]">
-            <Button
-              class="w-full h-9 bg-[#739CBF] hover:bg-[#5F87A8] text-white text-xs font-semibold"
-              @click="troubleshootOpen = false"
-            >
-              {{ isZh ? '我知道了，返回教程' : 'Got it, back to guide' }}
-            </Button>
-          </div>
+    <AppModal
+      :open="troubleshootOpen"
+      :title="isZh ? '常见报错与疑难排查' : 'Frequently Asked Questions & Troubleshooting'"
+      max-width-class="max-w-lg"
+      body-class="p-4 overflow-y-auto flex-1 flex flex-col gap-3 text-xs text-[#5E504D] leading-relaxed"
+      z-index-class="z-[70]"
+      @close="troubleshootOpen = false"
+    >
+      <div class="p-3 rounded-lg bg-[#FFF7F2] border border-[#EADFD9]">
+        <div class="font-bold text-[#4A3F3D] mb-1">
+          {{ isZh ? '1. 找不到一串数字的心动ID文件夹？（或国际版没有数字文件夹？）' : '1. Can\'t find the numeric XD ID folder? (Or no numeric folder in Global edition?)' }}
         </div>
+        <template v-if="isZh">
+          • <strong class="text-[#3f6d57]">心动版</strong>：必须先上游戏登录账号，在存档界面把云存档<strong class="text-[#4A3F3D]">下载到本地</strong>（或新建一个本地角色/地图），才会生成数字 ID 文件夹。<br />
+          • <strong class="text-[#739CBF]">国际版</strong>：本身就<strong class="text-[#4A3F3D]">没有数字 ID 文件夹</strong>！点进游戏目录后直接就是 <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">Players</code> 和 <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">Worlds</code>。
+        </template>
+        <template v-else>
+          • <strong class="text-[#3f6d57]">XD Edition (TapTap)</strong>: You must launch the game, log into your account, and in the save interface, <strong class="text-[#4A3F3D]">download your cloud save to local</strong> (or create a new local character/world) to generate the numeric ID folder.<br />
+          • <strong class="text-[#739CBF]">Global Edition</strong>: By design, it <strong class="text-[#4A3F3D]">DOES NOT have a numeric ID folder</strong>! Open the game folder and you will directly see <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">Players</code> and <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">Worlds</code>.
+        </template>
       </div>
-    </Teleport>
+
+      <div class="p-3 rounded-lg bg-[#FFF7F2] border border-[#EADFD9]">
+        <div class="font-bold text-[#9a4f56] mb-1">
+          {{ isZh ? '2. 覆盖补丁后打开游戏闪退 / 黑屏？' : '2. Game crashes or black screen after replacing patch files?' }}
+        </div>
+        <template v-if="isZh">
+          100% 是<strong class="text-[#4A3F3D]">补丁版本与当前游戏版本号不一致</strong>（例如游戏更新了但补丁还是老版本）。请确认补丁适配的最新版本号，或卸载重装游戏恢复原文件。
+        </template>
+        <template v-else>
+          100% caused by <strong class="text-[#4A3F3D]">a version mismatch between the patch and the game</strong> (e.g., game was updated but the patch is for an older version). Please verify the game version supported by the patch, or reinstall the game to restore clean files.
+        </template>
+      </div>
+
+      <div class="p-3 rounded-lg bg-[#FFF7F2] border border-[#EADFD9]">
+        <div class="font-bold text-[#739CBF] mb-1">
+          {{ isZh ? '3. 放了存档但进游戏看不到？' : '3. Placed save files but cannot see them in-game?' }}
+        </div>
+        <template v-if="isZh">
+          检查三点：① 没有误放进 <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">OldSaves</code> 文件夹；② 地图（<code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">.wld</code>）必须放 <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">Worlds/world</code>，人物（<code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">.plr</code>）必须放 <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">Players/player</code>；③ 彻底划掉游戏后台再重进。
+        </template>
+        <template v-else>
+          Check three points: ① Never place files in the <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">OldSaves</code> folder; ② Worlds (<code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">.wld</code>) must go into <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">Worlds/world</code>, Characters (<code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">.plr</code>) into <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">Players/player</code>; ③ Completely swipe away the game from recent apps and restart it.
+        </template>
+      </div>
+
+      <div class="p-3 rounded-lg bg-[#FFF7F2] border border-[#EADFD9]">
+        <div class="font-bold text-[#8a6526] mb-1">
+          {{ isZh ? '4. 数据线连上电脑，Android/data 里是空的？' : '4. Connected phone to PC via USB, but Android/data is empty?' }}
+        </div>
+        <template v-if="isZh">
+          安卓 11 起系统会挡住电脑对 <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">Android/data</code> 的访问，看到空文件夹是正常的。把文件先复制到手机 <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">Download</code> 文件夹，再用手机上的文件管理器移进游戏目录；文件管理器进不去 data 的话，按权限检测那一步用 Shizuku 授权。
+        </template>
+        <template v-else>
+          Since Android 11, the OS blocks computer access to <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">Android/data</code>, so seeing an empty folder is normal. Copy files into your phone's <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">Download</code> folder first, then use a phone file manager (like MT Manager) to move them into the game folder. If data is inaccessible, grant permission via Shizuku.
+        </template>
+      </div>
+
+      <div class="p-3 rounded-lg bg-[#FFF7F2] border border-[#EADFD9]">
+        <div class="font-bold text-[#5d5a86] mb-1">
+          {{ isZh ? '5. iPhone 连电脑后，访达 / iTunes 里没有泰拉瑞亚？' : '5. Connected iPhone to PC, but Terraria doesn\'t show in Finder / iTunes?' }}
+        </div>
+        <template v-if="isZh">
+          先解锁手机并在弹窗里点<strong class="text-[#4A3F3D]">信任</strong>；macOS 在访达里选设备后切到<strong class="text-[#4A3F3D]">文件</strong>标签，Windows 需要装 iTunes 或「Apple 设备」App 并打开<strong class="text-[#4A3F3D]">文件共享</strong>。列表里只显示支持文档管理的 App。
+        </template>
+        <template v-else>
+          Unlock your iPhone and tap <strong class="text-[#4A3F3D]">Trust</strong> on the prompt. On macOS, select your device in Finder and click the <strong class="text-[#4A3F3D]">Files</strong> tab. On Windows, install iTunes or Apple Devices app and open <strong class="text-[#4A3F3D]">File Sharing</strong>. Only apps supporting document storage will be listed.
+        </template>
+      </div>
+
+      <div class="p-3 rounded-lg bg-[#FFF7F2] border border-[#EADFD9]">
+        <div class="font-bold text-[#5d5a86] mb-1">
+          {{ isZh ? '6. 如何通过后缀区分存档文件？' : '6. How to identify save files by extension?' }}
+        </div>
+        • <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">.wld</code> = {{ isZh ? '地图存档（放 Worlds / world）' : 'World save (place in Worlds / world)' }}<br />
+        • <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">.plr</code> = {{ isZh ? '人物存档（放 Players / player）' : 'Character save (place in Players / player)' }}<br />
+        • <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">.bak / .bak2</code> = {{ isZh ? '自动备份（删掉 .bak 后缀即可当正式存档）' : 'Automatic backups (delete .bak extension to use as a live save)' }}<br />
+        • <code class="px-1 py-0.5 bg-white rounded border border-[#EADFD9] text-[11px]">global-metadata.dat</code> = {{ isZh ? '游戏底层补丁（仅安卓可用）' : 'Core engine patch (Android only)' }}
+      </div>
+    </AppModal>
   </div>
 </template>
-
-<style scoped>
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-</style>

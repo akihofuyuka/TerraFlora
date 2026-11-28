@@ -412,11 +412,11 @@ function resetBuilderAcc() {
           <span>游玩统计</span>
         </CardTitle>
       </CardHeader>
-      <CardContent class="p-3 pt-0 flex flex-col gap-2.5 text-xs">
-        <!-- 紧凑两栏统计区，无内嵌边框盒 -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <CardContent class="p-3 pt-0 text-xs">
+        <!-- 游玩统计 -->
+        <div class="grid grid-cols-2 lg:grid-cols-3 gap-2">
           <!-- 游玩时长 -->
-          <div class="p-2.5 rounded-lg bg-[#FFF7F2]/80 flex flex-col gap-1.5 min-w-0">
+          <div class="col-span-2 sm:col-span-1 p-2.5 rounded-lg bg-[#FFF7F2]/80 flex flex-col justify-between gap-1.5 min-w-0">
             <div class="flex items-center justify-between gap-2">
               <span class="font-bold text-[#4A3F3D] flex items-center gap-1.5 whitespace-nowrap">
                 <span class="shrink-0" :style="{ ...getItemSpriteStyle(17, 14), imageRendering: 'pixelated' }"></span>
@@ -451,7 +451,7 @@ function resetBuilderAcc() {
           </div>
 
           <!-- 渔夫任务次数 -->
-          <div class="p-2.5 rounded-lg bg-[#FFF7F2]/80 flex flex-col gap-1.5 min-w-0">
+          <div class="col-span-2 sm:col-span-1 p-2.5 rounded-lg bg-[#FFF7F2]/80 flex flex-col justify-between gap-1.5 min-w-0">
             <div class="flex flex-wrap items-center justify-between gap-1.5">
               <span class="font-bold text-[#4A3F3D] flex items-center gap-1.5 whitespace-nowrap">
                 <span class="shrink-0" :style="{ ...getItemSpriteStyle(3120, 14), imageRendering: 'pixelated' }"></span>
@@ -486,7 +486,7 @@ function resetBuilderAcc() {
           </div>
 
           <!-- 税收官待领钱币 (金/银/铜三格) -->
-          <div class="p-2.5 rounded-lg bg-[#FFF7F2]/80 flex flex-col gap-1.5 min-w-0">
+          <div class="col-span-2 sm:col-span-1 p-2.5 rounded-lg bg-[#FFF7F2]/80 flex flex-col justify-between gap-1.5 min-w-0">
             <div class="flex flex-wrap items-center justify-between gap-1.5">
               <span class="font-bold text-[#4A3F3D] flex items-center gap-1.5 whitespace-nowrap">
                 <span class="shrink-0" :style="{ ...getItemSpriteStyle(73, 14), imageRendering: 'pixelated' }"></span>
@@ -545,8 +545,8 @@ function resetBuilderAcc() {
           </div>
 
           <!-- 高尔夫积分 -->
-          <div class="p-2.5 rounded-lg bg-[#FFF7F2]/80 flex flex-col gap-1.5 min-w-0">
-            <div class="flex items-center justify-between gap-2">
+          <div class="col-span-1 p-2.5 rounded-lg bg-[#FFF7F2]/80 flex flex-col justify-between gap-1.5 min-w-0">
+            <div class="flex items-center justify-between gap-1">
               <span class="font-bold text-[#4A3F3D] flex items-center gap-1.5 whitespace-nowrap">
                 <span class="shrink-0" :style="{ ...getItemSpriteStyle(4039, 14), imageRendering: 'pixelated' }"></span>
                 <span>高尔夫积分</span>
@@ -568,11 +568,9 @@ function resetBuilderAcc() {
               @input="store.isModified = true"
             />
           </div>
-        </div>
 
-        <!-- 第二行：酒馆老板状态与 PvE / PvP 死亡次数 -->
-        <div class="grid grid-cols-2 lg:grid-cols-3 gap-2 pt-2 border-t border-[#EADFD9]/60">
-          <div class="col-span-2 lg:col-span-1 p-2 rounded-lg bg-[#FFF7F2]/80 flex flex-col gap-1 min-w-0">
+          <!-- 酒馆老板引导 -->
+          <div class="col-span-1 p-2.5 rounded-lg bg-[#FFF7F2]/80 flex flex-col justify-between gap-1.5 min-w-0">
             <div class="flex flex-wrap items-center justify-between gap-1">
               <span class="text-[11px] font-semibold text-[#4A3F3D] flex items-center gap-1 whitespace-nowrap">
                 <span class="shrink-0" :style="{ ...getItemSpriteStyle(3817, 13), imageRendering: 'pixelated' }"></span>
@@ -602,7 +600,8 @@ function resetBuilderAcc() {
             </div>
           </div>
 
-          <div class="p-2 rounded-lg bg-[#FFF7F2]/80 flex flex-col gap-1 min-w-0">
+          <!-- PvE 死亡次数 -->
+          <div class="col-span-1 p-2.5 rounded-lg bg-[#FFF7F2]/80 flex flex-col justify-between gap-1.5 min-w-0">
             <div class="flex items-center justify-between gap-1">
               <span class="text-[11px] font-semibold text-[#8E807C] whitespace-nowrap">PvE 死亡次数</span>
               <Button
@@ -623,7 +622,8 @@ function resetBuilderAcc() {
             />
           </div>
 
-          <div class="p-2 rounded-lg bg-[#FFF7F2]/80 flex flex-col gap-1 min-w-0">
+          <!-- PvP 死亡次数 -->
+          <div class="col-span-1 p-2.5 rounded-lg bg-[#FFF7F2]/80 flex flex-col justify-between gap-1.5 min-w-0">
             <div class="flex items-center justify-between gap-1">
               <span class="text-[11px] font-semibold text-[#8E807C] whitespace-nowrap">PvP 死亡次数</span>
               <Button
@@ -757,10 +757,10 @@ function resetBuilderAcc() {
               :key="item.index"
               type="button"
               :class="[
-                'inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[11px] font-medium transition-all cursor-pointer select-none',
+                'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all cursor-pointer select-none border',
                 !p.hideInfo[item.index]
-                  ? 'bg-[#739CBF]/15 text-[#4A3F3D] ring-1 ring-[#739CBF]/60'
-                  : 'bg-[#EFE7E2]/70 text-[#8E807C] opacity-75 hover:opacity-100'
+                  ? 'bg-[#EEF4F9] text-[#2F658D] border-[#C4D6E5]'
+                  : 'bg-[#EFE7E2]/70 text-[#8E807C] border-[#EADFD9] opacity-80 hover:opacity-100'
               ]"
               :title="`${item.label}：${!p.hideInfo[item.index] ? '显示中（点击隐藏）' : '已隐藏（点击显示）'}`"
               @click="toggleInfoDisplay(item.index)"
@@ -858,7 +858,7 @@ function resetBuilderAcc() {
             variant="outline"
             size="xs"
             :disabled="p.spawns.length === 0"
-            class="h-5 text-[10px] px-2 border-[#EADFD9] text-rose-700 hover:bg-rose-50 disabled:opacity-45 disabled:cursor-not-allowed"
+            class="h-5 text-[10px] px-2 btn-danger-soft disabled:opacity-45 disabled:cursor-not-allowed"
             @click="clearSpawns"
           >
             清空全部
@@ -957,7 +957,7 @@ function resetBuilderAcc() {
                 variant="outline"
                 size="xs"
                 :disabled="p.tempItems.length === 0"
-                class="h-5 text-[10px] px-1.5 border-[#EADFD9] text-[#4A3F3D] hover:bg-[#EFE7E2] disabled:opacity-45 disabled:cursor-not-allowed"
+                class="h-5 text-[10px] px-1.5 btn-danger-soft disabled:opacity-45 disabled:cursor-not-allowed"
                 @click="clearTempItems"
               >
                 清空
@@ -1003,7 +1003,7 @@ function resetBuilderAcc() {
                 variant="outline"
                 size="xs"
                 :disabled="p.refunds.length === 0"
-                class="h-5 text-[10px] px-1.5 border-[#EADFD9] text-[#4A3F3D] hover:bg-[#EFE7E2] disabled:opacity-45 disabled:cursor-not-allowed"
+                class="h-5 text-[10px] px-1.5 btn-danger-soft disabled:opacity-45 disabled:cursor-not-allowed"
                 @click="clearRefunds"
               >
                 清空
@@ -1071,7 +1071,7 @@ function resetBuilderAcc() {
                 variant="outline"
                 size="xs"
                 :disabled="p.dialogues.length === 0"
-                class="h-5 text-[10px] px-1.5 border-[#EADFD9] text-[#4A3F3D] hover:bg-[#EFE7E2] disabled:opacity-45 disabled:cursor-not-allowed"
+                class="h-5 text-[10px] px-1.5 btn-danger-soft disabled:opacity-45 disabled:cursor-not-allowed"
                 @click="clearDialogues"
               >
                 重置

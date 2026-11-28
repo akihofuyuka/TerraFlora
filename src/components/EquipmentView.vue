@@ -104,35 +104,21 @@ function activateCurrentLoadout() {
 
 <template>
   <div class="flex flex-col gap-3">
-    <!-- 顶部横向切换栏：配置 1、配置 2、配置 3、特殊装备 四个并列选项 -->
-    <div class="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+    <!-- 顶部横向切换栏（轻量化文字底线）：配置 1、配置 2、配置 3、特殊装备 -->
+    <div class="flex items-center gap-1 shadow-[inset_0_-1px_0_0_#EADFD9] overflow-x-auto overflow-y-hidden no-scrollbar">
       <button
         v-for="t in equipmentTabs"
         :key="t.id"
         :class="[
-          'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all duration-150 cursor-pointer border',
-          // 选中特殊装备
-          t.id === 'misc'
-            ? currentTab === 'misc'
-              ? 'bg-[#739CBF] text-white border-[#739CBF] shadow-xs'
-              : 'bg-white text-[#4A3F3D] border-[#EADFD9] hover:bg-[#EFE7E2] shadow-2xs'
-            // 选中配置 1~3
-            : currentTab === t.id
-              ? (store.player?.currentLoadoutIndex ?? 0) === t.id
-                // 正在查看 且 是游戏当前生效：实心激活态
-                ? 'bg-[#739CBF] text-white border-[#739CBF] shadow-xs'
-                // 正在查看 但 未设为当前生效：高亮选中态
-                : 'bg-[#739CBF]/15 text-[#4A3F3D] border-[#739CBF] shadow-xs'
-              // 未被选中
-              : (store.player?.currentLoadoutIndex ?? 0) === t.id
-                // 虽未被选中，但它是游戏当前生效配置
-                ? 'bg-white text-[#4A3F3D] border-[#739CBF]/60 hover:bg-[#EFE7E2] shadow-2xs'
-                : 'bg-white text-[#4A3F3D] border-[#EADFD9] hover:bg-[#EFE7E2] shadow-2xs'
+          'flex items-center gap-1.5 px-3 py-2 text-xs whitespace-nowrap transition-colors duration-150 cursor-pointer border-b-2 rounded-t-lg',
+          currentTab === t.id
+            ? 'border-[#739CBF] text-[#2F658D] bg-white/80 font-bold'
+            : 'border-transparent text-[#8E807C] font-semibold hover:text-[#4A3F3D] hover:bg-[#EFE7E2]/40'
         ]"
         @click="handleTabClick(t.id)"
       >
         <span
-          class="inline-block shrink-0 drop-shadow-[0_1px_1px_rgba(0,0,0,0.15)]"
+          class="inline-block shrink-0 drop-shadow-[0_1px_1px_rgba(0,0,0,0.12)]"
           :style="{ ...getItemSpriteStyle(t.itemId, 16), imageRendering: 'pixelated' }"
         ></span>
         <span>{{ t.label }}</span>
@@ -142,17 +128,17 @@ function activateCurrentLoadout() {
           <!-- 生效中标识 -->
           <span
             v-if="(store.player?.currentLoadoutIndex ?? 0) === t.id"
-            class="text-[10px] px-1 py-0 rounded font-normal"
-            :class="currentTab === t.id ? 'bg-white/20 text-white' : 'bg-[#A0D8E8]/40 text-[#4A3F3D]'"
+            class="inline-flex items-center gap-1 text-[10px] px-1.5 py-0 rounded-md font-semibold bg-[#EEF4F9] text-[#2F658D] border border-[#C4D6E5]"
           >
-            生效中
+            <span class="w-1.5 h-1.5 rounded-full bg-[#739CBF]"></span>
+            <span>生效中</span>
           </span>
           <!-- 首次点击选中后的二次点击提示 -->
           <span
             v-else-if="currentTab === t.id"
-            class="text-[9px] px-1 py-0.2 rounded font-bold bg-[#739CBF] text-white animate-pulse"
+            class="text-[10px] px-1.5 py-0 rounded-md font-semibold bg-[#F9D6DB]/70 text-[#4A3F3D] border border-[#E598A3]/60"
           >
-            再次点击生效
+            再点生效
           </span>
         </template>
       </button>
@@ -328,13 +314,3 @@ function activateCurrentLoadout() {
     </Card>
   </div>
 </template>
-
-<style scoped>
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-</style>

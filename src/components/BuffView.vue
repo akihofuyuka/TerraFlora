@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { store, showToast, type BuffItem } from '@/store';
+import AppModal from '@/components/ui/AppModal.vue';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,10 +9,12 @@ import { getItemSpriteStyle, getBuffSpriteStyle } from '@/utils/sprite';
 
 const p = computed(() => store.player);
 
-// 当前选中的 Buff 槽位索引 (0 ~ 43)
+// 当前选中的 Buff 槽位索引 (0 ~ 43) 与编辑前快照
 const selectedSlotIndex = ref<number | null>(null);
+const slotSnapshot = ref<{ type: number; time: number; wasModified: boolean } | null>(null);
 const buffSearchQuery = ref('');
 const selectedCategory = ref<'all' | 'combat' | 'utility' | 'debuff'>('all');
+const showRawTicks = ref(false);
 
 // 确保角色 buffs 数组至少有 44 个槽位
 const buffs = computed(() => {
@@ -130,11 +133,30 @@ function clearAllBuffs() {
 
 // 选中槽位操作
 function selectSlot(idx: number) {
+  const slot = buffs.value[idx];
+  slotSnapshot.value = slot
+    ? { type: slot.type, time: slot.time, wasModified: store.isModified }
+    : null;
   selectedSlotIndex.value = idx;
   buffSearchQuery.value = '';
+  showRawTicks.value = false;
 }
 
-function closeSlotEditor() {
+function cancelSlotEditor() {
+  if (selectedSlotIndex.value !== null && slotSnapshot.value) {
+    const slot = buffs.value[selectedSlotIndex.value];
+    if (slot) {
+      slot.type = slotSnapshot.value.type;
+      slot.time = slotSnapshot.value.time;
+    }
+    store.isModified = slotSnapshot.value.wasModified;
+  }
+  slotSnapshot.value = null;
+  selectedSlotIndex.value = null;
+}
+
+function confirmSlotEditor() {
+  slotSnapshot.value = null;
   selectedSlotIndex.value = null;
 }
 
@@ -269,7 +291,7 @@ const filteredBuffs = computed(() => {
           <Button
             variant="outline"
             size="xs"
-            class="h-6.5 text-xs font-semibold border-[#EADFD9] text-[#4A3F3D] hover:bg-[#F9D6DB]/60 px-2"
+            class="h-6.5 text-xs font-semibold btn-danger-soft px-2"
             @click="clearAllDebuffs"
           >
             清除减益
@@ -278,7 +300,7 @@ const filteredBuffs = computed(() => {
           <Button
             variant="outline"
             size="xs"
-            class="h-6.5 text-xs font-semibold border-[#EADFD9] text-[#8E807C] hover:text-rose-600 hover:bg-rose-50 px-2"
+            class="h-6.5 text-xs font-semibold btn-danger-soft px-2"
             @click="clearAllBuffs"
           >
             清空
@@ -287,23 +309,23 @@ const filteredBuffs = computed(() => {
       </CardHeader>
 
       <CardContent class="p-2.5 sm:p-3">
-        <!-- 44 个 Buff 槽位 (手机端 4 列紧凑排布，桌面端 11 列) -->
+        <!-- 44 个 Buff 槽位 (暖灰实心圆角凹槽，手机端 4 列紧凑排布，桌面端 11 列) -->
         <div class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-11 gap-1.5 sm:gap-2">
           <div
             v-for="(slot, idx) in buffs"
             :key="idx"
             :class="[
-              'p-1.5 rounded-lg border transition-all cursor-pointer flex flex-col items-center justify-between text-center relative group min-h-[72px] sm:min-h-[82px]',
+              'p-1.5 rounded-lg border transition-all cursor-pointer flex flex-col items-center justify-between text-center relative group min-h-[68px] sm:min-h-[76px]',
               selectedSlotIndex === idx
-                ? 'bg-[#739CBF]/15 border-[#739CBF] ring-1.5 ring-[#739CBF]/50 shadow-xs'
+                ? 'bg-[#EEF4F9] border-[#739CBF] ring-2 ring-[#739CBF]/60 shadow-xs'
                 : slot.type > 0
-                  ? 'bg-[#FFF7F2] border-[#EADFD9] hover:bg-[#EFE7E2] hover:border-[#739CBF]'
-                  : 'bg-[#FFF7F2]/40 border-dashed border-[#EADFD9] hover:bg-[#FFF7F2]'
+                  ? 'bg-[#FFF7F2] border-[#EADFD9] hover:bg-[#EFE7E2] hover:border-[#C4D6E5]'
+                  : 'bg-[#EFE7E2] border-[#EADFD9] hover:bg-[#E8DFD9]'
             ]"
             @click="selectSlot(idx)"
           >
             <!-- 槽位序号徽章 -->
-            <span class="absolute top-0.5 left-1 text-[8px] font-mono text-[#8E807C]/80">#{{ idx + 1 }}</span>
+            <span class="absolute top-0.5 left-1 text-[9px] font-mono text-[#8E807C]/70">#{{ idx + 1 }}</span>
 
             <!-- 图标展示 -->
             <div class="w-7 h-7 flex items-center justify-center mt-2 shrink-0">
@@ -312,251 +334,249 @@ const filteredBuffs = computed(() => {
                 :style="getBuffSpriteStyle(slot.type, 28)"
                 :title="store.buffsMap.get(slot.type)?.tip || ''"
               ></div>
-              <div v-else class="w-5 h-5 rounded-full border border-dashed border-[#EADFD9] flex items-center justify-center text-[#8E807C] text-[10px]">
-                +
-              </div>
             </div>
 
             <!-- 名称展示与时长 -->
-            <div class="flex flex-col items-center w-full px-0.5 mt-0.5">
+            <div v-if="slot.type > 0" class="flex flex-col items-center w-full px-0.5 mt-0.5">
               <span class="text-[10px] sm:text-[11px] font-bold truncate max-w-full leading-tight text-[#4A3F3D]">
-                {{ slot.type > 0 ? (store.buffsMap.get(slot.type)?.name || `Buff #${slot.type}`) : '空' }}
+                {{ store.buffsMap.get(slot.type)?.name || `Buff #${slot.type}` }}
               </span>
-              <span
-                v-if="slot.type > 0"
-                class="text-[9px] font-mono font-semibold text-[#739CBF] leading-tight"
-              >
+              <span class="text-[9px] font-mono font-semibold text-[#2F658D] leading-tight">
                 {{ formatDuration(slot.time) }}
               </span>
             </div>
+            <div v-else class="h-3.5"></div>
           </div>
         </div>
       </CardContent>
     </Card>
 
-    <!-- 槽位修改与 Buff 搜索模态抽屉 -->
-    <Teleport to="body">
-      <div
-        v-if="selectedSlotIndex !== null"
-        class="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-3 sm:p-6"
-        @click.self="closeSlotEditor"
-      >
-        <div class="bg-white rounded-2xl border border-[#EADFD9] shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden">
-        <!-- 弹窗顶栏 -->
-        <div class="p-4 border-b border-[#EADFD9] flex items-center justify-between bg-[#FFF7F2]">
-          <div class="flex items-center gap-2">
-            <span :style="{ ...getItemSpriteStyle(292, 16), imageRendering: 'pixelated' }"></span>
-            <span class="text-sm font-bold text-[#4A3F3D]">
-              配置槽位 #{{ selectedSlotIndex + 1 }}
-            </span>
+    <!-- 槽位修改与 Buff 搜索弹窗 -->
+    <AppModal
+      :open="selectedSlotIndex !== null"
+      :title="selectedSlotIndex !== null ? `配置槽位 #${selectedSlotIndex + 1}` : ''"
+      max-width-class="max-w-xl"
+      panel-class="max-h-[86dvh]"
+      body-class="p-3 overflow-y-auto overscroll-contain flex-1 flex flex-col gap-2.5"
+      z-index-class="z-[60]"
+      @close="cancelSlotEditor"
+    >
+      <template #icon>
+        <span :style="{ ...getItemSpriteStyle(292, 16), imageRendering: 'pixelated' }"></span>
+      </template>
+
+      <template v-if="selectedSlotIndex !== null">
+        <!-- 当前槽位状态概览 -->
+        <div class="p-2 rounded-xl bg-[#FFF7F2] border border-[#EADFD9] flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <div class="w-9 h-9 rounded-lg bg-[#EFE7E2] border border-[#EADFD9] flex items-center justify-center shrink-0">
+              <div
+                v-if="buffs[selectedSlotIndex].type > 0"
+                :style="getBuffSpriteStyle(buffs[selectedSlotIndex].type, 26)"
+              ></div>
+            </div>
+            <div class="flex flex-col min-w-0">
+              <span class="text-xs font-bold text-[#4A3F3D] truncate">
+                {{ buffs[selectedSlotIndex].type > 0 ? store.buffsMap.get(buffs[selectedSlotIndex].type)?.name : '未设置状态' }}
+              </span>
+              <span v-if="buffs[selectedSlotIndex].type > 0 && store.buffsMap.get(buffs[selectedSlotIndex].type)?.tip" class="text-[11px] text-[#8E807C] truncate">
+                {{ store.buffsMap.get(buffs[selectedSlotIndex].type)?.tip }}
+              </span>
+            </div>
           </div>
-          <button
-            class="text-[#8E807C] hover:text-[#4A3F3D] text-lg font-bold p-1 cursor-pointer"
-            @click="closeSlotEditor"
+
+          <!-- 清除当前槽位 -->
+          <Button
+            v-if="buffs[selectedSlotIndex].type > 0"
+            variant="outline"
+            size="xs"
+            class="h-7 btn-danger-soft px-2.5 shrink-0"
+            @click="clearCurrentSlot"
           >
-            ✕
-          </button>
+            清空该槽位
+          </Button>
         </div>
 
-        <div class="p-4 overflow-y-auto flex flex-col gap-4">
-          <!-- 当前槽位状态概览与持续时间设置 -->
-          <div class="p-3 rounded-xl bg-[#FFF7F2] border border-[#EADFD9] flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div class="flex items-center gap-3 shrink-0">
-              <div class="w-12 h-12 rounded-xl bg-white border border-[#EADFD9] flex items-center justify-center shadow-xs">
-                <div
-                  v-if="buffs[selectedSlotIndex].type > 0"
-                  :style="getBuffSpriteStyle(buffs[selectedSlotIndex].type, 32)"
-                ></div>
-                <span v-else class="text-[#8E807C] text-xs font-semibold">空</span>
-              </div>
-              <div class="flex flex-col">
-                <span class="text-xs font-bold text-[#4A3F3D]">
-                  {{ buffs[selectedSlotIndex].type > 0 ? store.buffsMap.get(buffs[selectedSlotIndex].type)?.name : '未设置' }}
-                </span>
-                <span v-if="buffs[selectedSlotIndex].type > 0 && store.buffsMap.get(buffs[selectedSlotIndex].type)?.tip" class="text-[10px] text-[#8E807C]">
-                  {{ store.buffsMap.get(buffs[selectedSlotIndex].type)?.tip }}
-                </span>
-              </div>
-            </div>
-
-            <!-- 清除当前槽位 -->
-            <Button
-              v-if="buffs[selectedSlotIndex].type > 0"
-              variant="outline"
-              size="xs"
-              class="h-7 border-[#EADFD9] text-rose-600 hover:bg-rose-50"
-              @click="clearCurrentSlot"
-            >
-              清空该槽位
-            </Button>
-          </div>
-
-          <!-- 持续时间调节 -->
-          <div v-if="buffs[selectedSlotIndex].type > 0" class="flex flex-col gap-2.5 p-3 rounded-xl bg-[#FFF7F2] border border-[#EADFD9]">
-            <span class="text-xs font-bold text-[#4A3F3D]">持续时间 (天 / 时 / 分 / 秒)</span>
-
-            <!-- 天 / 时 / 分 / 秒 输入组 -->
-            <div class="flex items-center gap-2 flex-wrap">
-              <div class="flex items-center gap-1">
-                <input
-                  v-model.number="currentDays"
-                  type="number"
-                  min="0"
-                  max="414"
-                  class="w-14 h-7 text-center font-mono font-bold text-xs rounded border border-[#EADFD9] bg-white text-[#4A3F3D] outline-none"
-                />
-                <span class="text-xs text-[#8E807C]">天</span>
-              </div>
-              <div class="flex items-center gap-1">
-                <input
-                  v-model.number="currentHours"
-                  type="number"
-                  min="0"
-                  max="23"
-                  class="w-12 h-7 text-center font-mono font-bold text-xs rounded border border-[#EADFD9] bg-white text-[#4A3F3D] outline-none"
-                />
-                <span class="text-xs text-[#8E807C]">时</span>
-              </div>
-              <div class="flex items-center gap-1">
-                <input
-                  v-model.number="currentMinutes"
-                  type="number"
-                  min="0"
-                  max="59"
-                  class="w-12 h-7 text-center font-mono font-bold text-xs rounded border border-[#EADFD9] bg-white text-[#4A3F3D] outline-none"
-                />
-                <span class="text-xs text-[#8E807C]">分</span>
-              </div>
-              <div class="flex items-center gap-1">
-                <input
-                  v-model.number="currentSeconds"
-                  type="number"
-                  min="0"
-                  max="59"
-                  class="w-12 h-7 text-center font-mono font-bold text-xs rounded border border-[#EADFD9] bg-white text-[#4A3F3D] outline-none"
-                />
-                <span class="text-xs text-[#8E807C]">秒</span>
-              </div>
-            </div>
-
-            <!-- Ticks 直接输入与快捷预设 -->
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-[#EADFD9]">
-              <div class="flex items-center gap-1.5">
-                <span class="text-[11px] font-mono text-[#8E807C]">Ticks:</span>
-                <input
-                  :value="buffs[selectedSlotIndex].time"
-                  type="number"
-                  min="0"
-                  :max="MAX_BUFF_TICKS"
-                  class="w-28 h-6.5 text-center font-mono font-bold text-xs rounded border border-[#EADFD9] bg-white text-[#4A3F3D] outline-none"
-                  @input="setSlotTicks(parseInt(($event.target as HTMLInputElement).value) || 0)"
-                />
-                <span class="text-[10px] text-[#8E807C]">(上限: 2147483647)</span>
-              </div>
-
-              <!-- 快捷预设按钮: 5 分钟 / 1 小时 / 超长 -->
-              <div class="flex items-center gap-1 flex-wrap">
-                <button
-                  class="px-2 py-0.5 text-xs font-semibold rounded border border-[#EADFD9] bg-white hover:bg-[#EFE7E2] cursor-pointer text-[#4A3F3D] shadow-2xs"
-                  @click="setSlotTicks(18000)"
-                >
-                  5 分钟
-                </button>
-                <button
-                  class="px-2 py-0.5 text-xs font-semibold rounded border border-[#EADFD9] bg-white hover:bg-[#EFE7E2] cursor-pointer text-[#4A3F3D] shadow-2xs"
-                  @click="setSlotTicks(216000)"
-                >
-                  1 小时
-                </button>
-                <button
-                  class="px-2 py-0.5 text-xs font-semibold rounded border border-[#739CBF] bg-[#739CBF]/10 hover:bg-[#739CBF]/20 cursor-pointer text-[#4A3F3D] shadow-2xs"
-                  @click="setSlotTicks(MAX_BUFF_TICKS)"
-                  title="2,147,483,647 ticks (约 414 天/上限)"
-                >
-                  超长 (约414天)
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- 搜索与筛选全部 Buff (分类胶囊合并至标题行右侧，大幅释放列表高度) -->
-          <div class="flex flex-col gap-2 pt-1 border-t border-[#EADFD9] flex-1 min-h-0">
-            <div class="flex flex-wrap items-center justify-between gap-1.5">
-              <label class="text-xs font-semibold text-[#4A3F3D]">选择或替换状态效果</label>
-              <div class="flex items-center gap-1">
-                <button
-                  v-for="cat in [
-                    { id: 'all' as const, label: '全部' },
-                    { id: 'combat' as const, label: '常用战斗' },
-                    { id: 'debuff' as const, label: '减益' }
-                  ]"
-                  :key="cat.id"
-                  :class="[
-                    'text-[10px] px-2 py-0.5 rounded font-semibold border transition-all cursor-pointer',
-                    selectedCategory === cat.id
-                      ? 'bg-[#739CBF] text-white border-[#739CBF] shadow-2xs'
-                      : 'bg-[#FFF7F2] text-[#4A3F3D] border-[#EADFD9] hover:bg-[#EFE7E2]'
-                  ]"
-                  @click="selectedCategory = cat.id"
-                >
-                  {{ cat.label }}
-                </button>
-                <span class="text-[10px] text-[#8E807C] ml-1">共 {{ filteredBuffs.length }} 种</span>
-              </div>
-            </div>
-
-            <div class="flex gap-2">
-              <Input
-                v-model="buffSearchQuery"
-                type="text"
-                placeholder="搜索 Buff 名称 / 拼音 / 英文 / ID (如 铁皮, tiepi, 5)..."
-                class="h-7.5 text-xs bg-[#FFF7F2] border-[#EADFD9]"
-              />
-            </div>
-
-            <!-- 可视高度大幅扩大的 Buff 列表 -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-72 sm:max-h-88 overflow-y-auto p-1.5 border border-[#EADFD9] rounded-xl bg-white shadow-2xs">
+        <!-- 持续时间调节 -->
+        <div v-if="buffs[selectedSlotIndex].type > 0" class="flex flex-col gap-2 p-2.5 rounded-xl bg-[#FFF7F2] border border-[#EADFD9]">
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <span class="text-xs font-bold text-[#4A3F3D]">持续时间 (天/时/分/秒)</span>
+            <!-- 快捷预设按钮: 5 分钟 / 1 小时 / 超长 / Ticks 切换 -->
+            <div class="flex items-center gap-1 flex-wrap">
               <button
-                v-for="b in filteredBuffs"
-                :key="b.id"
-                :class="[
-                  'p-2 rounded-lg border text-left flex items-center gap-2.5 transition-all cursor-pointer',
-                  buffs[selectedSlotIndex].type === b.id
-                    ? 'bg-[#739CBF] text-white border-[#739CBF] shadow-xs'
-                    : 'bg-white text-[#4A3F3D] border-[#EADFD9] hover:bg-[#EFE7E2]'
-                ]"
-                @click="setSlotBuff(b)"
+                class="px-2 py-0.5 text-[11px] font-semibold rounded-lg border border-[#EADFD9] bg-white hover:bg-[#EFE7E2] cursor-pointer text-[#4A3F3D] shadow-2xs"
+                @click="setSlotTicks(18000)"
               >
-                <div class="w-8 h-8 shrink-0 flex items-center justify-center bg-[#EFE7E2] rounded-lg">
-                  <div :style="getBuffSpriteStyle(b.id, 28)"></div>
-                </div>
-                <div class="flex flex-col min-w-0 flex-1">
-                  <div class="flex items-center justify-between">
-                    <span class="text-xs font-bold truncate">{{ b.name }}</span>
-                    <span class="text-[10px] font-mono opacity-70">#{{ b.id }}</span>
-                  </div>
-                  <span class="text-[10px] opacity-75 truncate" :title="b.tip">
-                    {{ b.tip || b.en }}
-                  </span>
-                </div>
+                5 分钟
+              </button>
+              <button
+                class="px-2 py-0.5 text-[11px] font-semibold rounded-lg border border-[#EADFD9] bg-white hover:bg-[#EFE7E2] cursor-pointer text-[#4A3F3D] shadow-2xs"
+                @click="setSlotTicks(216000)"
+              >
+                1 小时
+              </button>
+              <button
+                class="px-2 py-0.5 text-[11px] font-semibold rounded-lg border border-[#C4D6E5] bg-[#EEF4F9] hover:bg-[#739CBF]/20 cursor-pointer text-[#2F658D] shadow-2xs"
+                @click="setSlotTicks(MAX_BUFF_TICKS)"
+                title="2,147,483,647 ticks (约 414 天/上限)"
+              >
+                超长
+              </button>
+              <button
+                type="button"
+                class="px-1.5 py-0.5 text-[10px] font-mono font-medium rounded-md border cursor-pointer transition-colors"
+                :class="showRawTicks ? 'border-[#C4D6E5] bg-[#EEF4F9] text-[#2F658D]' : 'border-transparent text-[#8E807C] hover:text-[#4A3F3D]'"
+                title="切换原始 Ticks 数值输入"
+                @click="showRawTicks = !showRawTicks"
+              >
+                Ticks
               </button>
             </div>
           </div>
+
+          <!-- 天 / 时 / 分 / 秒 输入 -->
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <div class="flex items-center gap-1">
+              <input
+                v-model.number="currentDays"
+                type="number"
+                min="0"
+                max="414"
+                class="w-12 h-7 text-center font-mono font-bold text-xs rounded-lg border border-[#EADFD9] bg-white text-[#4A3F3D] outline-none"
+              />
+              <span class="text-xs text-[#8E807C]">天</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <input
+                v-model.number="currentHours"
+                type="number"
+                min="0"
+                max="23"
+                class="w-11 h-7 text-center font-mono font-bold text-xs rounded-lg border border-[#EADFD9] bg-white text-[#4A3F3D] outline-none"
+              />
+              <span class="text-xs text-[#8E807C]">时</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <input
+                v-model.number="currentMinutes"
+                type="number"
+                min="0"
+                max="59"
+                class="w-11 h-7 text-center font-mono font-bold text-xs rounded-lg border border-[#EADFD9] bg-white text-[#4A3F3D] outline-none"
+              />
+              <span class="text-xs text-[#8E807C]">分</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <input
+                v-model.number="currentSeconds"
+                type="number"
+                min="0"
+                max="59"
+                class="w-11 h-7 text-center font-mono font-bold text-xs rounded-lg border border-[#EADFD9] bg-white text-[#4A3F3D] outline-none"
+              />
+              <span class="text-xs text-[#8E807C]">秒</span>
+            </div>
+          </div>
+
+          <!-- 原始 Ticks 输入（按需展开） -->
+          <div v-if="showRawTicks" class="flex items-center gap-1.5 pt-1 border-t border-[#EADFD9]/60">
+            <span class="text-[11px] font-mono text-[#8E807C]">Ticks:</span>
+            <input
+              :value="buffs[selectedSlotIndex].time"
+              type="number"
+              min="0"
+              :max="MAX_BUFF_TICKS"
+              class="w-28 h-7 text-center font-mono font-bold text-xs rounded-lg border border-[#EADFD9] bg-white text-[#4A3F3D] outline-none"
+              @input="setSlotTicks(parseInt(($event.target as HTMLInputElement).value) || 0)"
+            />
+            <span class="text-[10px] text-[#8E807C]">(60 ticks = 1 秒)</span>
+          </div>
         </div>
 
-        <!-- 弹窗底栏 -->
-        <div class="p-3 border-t border-[#EADFD9] bg-[#FFF7F2] flex justify-end">
+        <!-- 搜索与筛选全部 Buff -->
+        <div class="flex flex-col gap-1.5 pt-1 border-t border-[#EADFD9] flex-1 min-h-0">
+          <div class="flex flex-wrap items-center justify-between gap-1.5">
+            <label class="text-xs font-semibold text-[#4A3F3D]">选择或替换状态效果</label>
+            <div class="flex items-center gap-1">
+              <button
+                v-for="cat in [
+                  { id: 'all' as const, label: '全部' },
+                  { id: 'combat' as const, label: '常用战斗' },
+                  { id: 'debuff' as const, label: '减益' }
+                ]"
+                :key="cat.id"
+                :class="[
+                  'text-[11px] px-2 py-0.5 rounded-lg font-semibold border transition-all cursor-pointer',
+                  selectedCategory === cat.id
+                    ? 'bg-[#EEF4F9] text-[#2F658D] border-[#C4D6E5] shadow-2xs'
+                    : 'bg-[#FFF7F2] text-[#4A3F3D] border-[#EADFD9] hover:bg-[#EFE7E2]'
+                ]"
+                @click="selectedCategory = cat.id"
+              >
+                {{ cat.label }}
+              </button>
+              <span class="text-[11px] text-[#8E807C] ml-1">共 {{ filteredBuffs.length }} 种</span>
+            </div>
+          </div>
+
+          <div class="flex gap-2">
+            <Input
+              v-model="buffSearchQuery"
+              type="text"
+              placeholder="搜索 Buff 名称 / 拼音 / 英文 / ID (如 铁皮, tiepi, 5)..."
+              class="h-8 text-xs bg-[#FFF7F2] border-[#EADFD9]"
+            />
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-1 max-h-[46dvh] sm:max-h-80 overflow-y-auto overscroll-contain p-1.5 border border-[#EADFD9] rounded-xl bg-white shadow-2xs">
+            <button
+              v-for="b in filteredBuffs"
+              :key="b.id"
+              :class="[
+                'p-2 rounded-lg border text-left flex items-center gap-2.5 transition-all cursor-pointer',
+                buffs[selectedSlotIndex].type === b.id
+                  ? 'bg-[#EEF4F9] text-[#2F658D] border-[#C4D6E5] shadow-2xs'
+                  : 'bg-white text-[#4A3F3D] border-[#EADFD9] hover:bg-[#EFE7E2]'
+              ]"
+              @click="setSlotBuff(b)"
+            >
+              <div class="w-8 h-8 shrink-0 flex items-center justify-center bg-[#EFE7E2] rounded-lg">
+                <div :style="getBuffSpriteStyle(b.id, 28)"></div>
+              </div>
+              <div class="flex flex-col min-w-0 flex-1">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold truncate">{{ b.name }}</span>
+                  <span class="text-[10px] font-mono opacity-70">#{{ b.id }}</span>
+                </div>
+                <span class="text-[10px] opacity-75 truncate" :title="b.tip">
+                  {{ b.tip || b.en }}
+                </span>
+              </div>
+            </button>
+          </div>
+        </div>
+      </template>
+
+      <template #footer>
+        <div class="flex items-center justify-end gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            class="h-8 text-xs border-[#EADFD9] bg-white text-[#4A3F3D] hover:bg-[#F9D6DB]/40 px-3"
+            @click="cancelSlotEditor"
+          >
+            取消
+          </Button>
           <Button
             variant="default"
             size="sm"
-            class="h-8 text-xs font-semibold bg-[#739CBF] text-white px-4"
-            @click="closeSlotEditor"
+            class="h-8 text-xs font-bold bg-[#739CBF] hover:bg-[#5f87a8] text-white px-4"
+            @click="confirmSlotEditor"
           >
-            完成
+            确认保存
           </Button>
         </div>
-      </div>
-    </div>
-    </Teleport>
+      </template>
+    </AppModal>
   </div>
 </template>

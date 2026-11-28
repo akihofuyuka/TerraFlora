@@ -2,26 +2,22 @@
 import {
   store,
   exportPlrFile,
+  exportWldFile,
   openBackupNotice,
   setActiveTool,
 } from '@/store';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { getItemSpriteStyle } from '@/utils/sprite';
 
 function openAbout() {
-  if (store.activeTool === 'plr' && store.player) {
-    store.activeTab = 'about';
-  } else {
-    setActiveTool('about');
-  }
+  setActiveTool('about');
 }
 </script>
 
 <template>
   <header class="bg-white border-b border-[#EADFD9] sticky top-0 z-40 px-3 md:px-4 py-2 shadow-xs">
     <div class="max-w-6xl mx-auto flex flex-col gap-2">
-      <div class="flex items-center justify-between gap-2">
+      <div class="flex items-center justify-between gap-2 min-h-[36px]">
         <div class="flex items-center gap-2.5 min-w-0">
           <div
             class="w-8 h-8 flex items-center justify-center shrink-0 cursor-pointer"
@@ -57,6 +53,19 @@ function openAbout() {
                 type="button"
                 :class="[
                   'flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer select-none',
+                  store.activeTool === 'wld'
+                    ? 'bg-[#739CBF] text-white shadow-2xs'
+                    : 'text-[#4A3F3D] hover:bg-[#EFE7E2]'
+                ]"
+                @click="setActiveTool('wld')"
+              >
+                <span :style="{ ...getItemSpriteStyle(893, 14), imageRendering: 'pixelated' }"></span>
+                <span>地图存档</span>
+              </button>
+              <button
+                type="button"
+                :class="[
+                  'flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer select-none',
                   store.activeTool === 'pixelart'
                     ? 'bg-[#739CBF] text-white shadow-2xs'
                     : 'text-[#4A3F3D] hover:bg-[#EFE7E2]'
@@ -80,14 +89,6 @@ function openAbout() {
                 <span>存档向导</span>
               </button>
             </div>
-
-            <Badge
-              v-if="store.activeTool === 'plr' && store.isModified"
-              variant="outline"
-              class="text-[10px] px-1 py-0 h-4 border-[#E598A3] text-[#4A3F3D] bg-[#F9D6DB]"
-            >
-              已修改
-            </Badge>
 
             <button
               type="button"
@@ -116,7 +117,7 @@ function openAbout() {
           </div>
         </div>
 
-        <!-- 右侧工具栏：已载入角色时显示导出 -->
+        <!-- 右侧工具栏：已载入角色或地图时显示导出 -->
         <div v-if="store.activeTool === 'plr' && store.player" class="flex items-center gap-1.5 md:gap-2 shrink-0">
           <Button
             variant="default"
@@ -127,47 +128,71 @@ function openAbout() {
             导出 .plr
           </Button>
         </div>
+        <div v-else-if="store.activeTool === 'wld' && store.worldFile" class="flex items-center gap-1.5 md:gap-2 shrink-0">
+          <Button
+            variant="default"
+            size="sm"
+            class="h-8 text-xs font-semibold bg-[#739CBF] hover:bg-[#5f87a8] text-white shadow-sm px-2.5"
+            @click="exportWldFile"
+          >
+            导出 .wld
+          </Button>
+        </div>
       </div>
 
       <!-- 移动端紧凑功能切换栏 -->
-      <div class="grid grid-cols-3 gap-1 md:hidden bg-[#FFF7F2] border border-[#EADFD9] rounded-xl p-0.5">
+      <div class="grid grid-cols-4 gap-1 md:hidden bg-[#FFF7F2] border border-[#EADFD9] rounded-xl p-0.5">
         <button
           type="button"
           :class="[
-            'flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer select-none',
+            'flex items-center justify-center gap-1 py-1.5 px-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer select-none whitespace-nowrap',
             store.activeTool === 'plr'
               ? 'bg-[#739CBF] text-white shadow-2xs'
               : 'text-[#4A3F3D] hover:bg-[#EFE7E2]'
           ]"
           @click="setActiveTool('plr')"
         >
-          <span :style="{ ...getItemSpriteStyle(48, 14), imageRendering: 'pixelated' }"></span>
+          <span :style="{ ...getItemSpriteStyle(48, 13), imageRendering: 'pixelated' }"></span>
           <span>角色存档</span>
         </button>
         <button
           type="button"
           :class="[
-            'flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer select-none',
+            'flex items-center justify-center gap-1 py-1.5 px-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer select-none whitespace-nowrap',
+            store.activeTool === 'wld'
+              ? 'bg-[#739CBF] text-white shadow-2xs'
+              : 'text-[#4A3F3D] hover:bg-[#EFE7E2]'
+          ]"
+          @click="setActiveTool('wld')"
+        >
+          <span :style="{ ...getItemSpriteStyle(893, 13), imageRendering: 'pixelated' }"></span>
+          <span>地图存档</span>
+        </button>
+        <button
+          type="button"
+          :class="[
+            'flex items-center justify-center gap-1 py-1.5 px-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer select-none whitespace-nowrap',
             store.activeTool === 'pixelart'
               ? 'bg-[#739CBF] text-white shadow-2xs'
               : 'text-[#4A3F3D] hover:bg-[#EFE7E2]'
           ]"
           @click="setActiveTool('pixelart')"
         >
-          <span :style="{ ...getItemSpriteStyle(1071, 14), imageRendering: 'pixelated' }"></span>
-          <span>像素画选色</span>
+          <span :style="{ ...getItemSpriteStyle(1071, 13), imageRendering: 'pixelated' }"></span>
+          <span class="sm:hidden">像素画</span>
+          <span class="hidden sm:inline">像素画选色</span>
         </button>
         <button
           type="button"
           :class="[
-            'flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer select-none',
+            'flex items-center justify-center gap-1 py-1.5 px-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer select-none whitespace-nowrap',
             store.activeTool === 'guide'
               ? 'bg-[#739CBF] text-white shadow-2xs'
               : 'text-[#4A3F3D] hover:bg-[#EFE7E2]'
           ]"
           @click="setActiveTool('guide')"
         >
-          <span :style="{ ...getItemSpriteStyle(149, 14), imageRendering: 'pixelated' }"></span>
+          <span :style="{ ...getItemSpriteStyle(149, 13), imageRendering: 'pixelated' }"></span>
           <span>存档向导</span>
         </button>
       </div>

@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue';
 import { Ban, Copy, Download, PackagePlus, Plus, Sparkles, Star, X } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { showToast, store } from '@/store';
 import { getItemSpriteStyle } from '@/utils/sprite';
@@ -38,6 +38,7 @@ const emit = defineEmits<{
 }>();
 
 const exportingBlueprint = ref(false);
+const topExtractCount = ref(12);
 
 interface PaintSummary {
   paintId: number;
@@ -95,6 +96,13 @@ function formatStacks(count: number, itemId: number): string {
 }
 
 const includedSet = computed(() => new Set(normalizeKeyList(props.options.includedMaterialKeys)));
+const distinctBomMaterialCount = computed(() => {
+  const keys = new Set<string>();
+  for (const entry of props.result.bom) {
+    keys.add(materialKey(entry.material));
+  }
+  return keys.size;
+});
 
 function excludeBomMaterial(entry: BomEntry) {
   const key = materialKey(entry.material);
@@ -121,10 +129,13 @@ function toggleIncludeBom(entry: BomEntry) {
 }
 
 function focusTopBomAsInclude() {
+  const maxCount = Math.max(1, distinctBomMaterialCount.value);
+  const limit = Math.max(1, Math.min(maxCount, Math.floor(Number(topExtractCount.value) || 12)));
+  topExtractCount.value = limit;
   const keys = new Set<string>();
   for (const entry of props.result.bom) {
     keys.add(materialKey(entry.material));
-    if (keys.size >= 12) break;
+    if (keys.size >= limit) break;
   }
   const next = Array.from(keys);
   emit('update:options', {
@@ -245,21 +256,27 @@ function grantMaterialsToPlayer() {
 
 <template>
   <div class="flex flex-col gap-3">
-    <!-- 批量转换控制与筛选 -->
+    <!-- 区块 1：预览控制与材料筛选 -->
     <Card class="border-[#EADFD9]">
-      <CardContent class="p-3.5 sm:p-4 flex flex-col gap-3">
-        <div class="flex items-center justify-between gap-3 flex-wrap">
+      <CardHeader class="p-3.5 pb-2">
+        <CardTitle class="text-xs font-bold text-[#4A3F3D] flex items-center gap-1.5">
+          <span :style="{ ...getItemSpriteStyle(1071, 14), imageRendering: 'pixelated' }"></span>
+          <span>预览与筛选控制</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent class="p-3.5 pt-0 flex flex-col gap-3">
+        <div class="bg-[#FFF7F2] border border-[#EADFD9] rounded-xl p-2.5 flex items-center justify-between gap-2.5 flex-wrap">
           <!-- 原图 / 实景预览切换 -->
           <div class="flex items-center gap-2 flex-wrap">
             <span class="text-xs font-bold text-[#4A3F3D]">画布显示</span>
-            <div class="flex items-center bg-[#FFF7F2] border border-[#EADFD9] rounded-lg p-0.5 gap-0.5">
+            <div class="flex items-center bg-white border border-[#EADFD9] rounded-lg p-0.5 gap-0.5">
               <button
                 type="button"
                 :class="[
-                  'px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer select-none',
+                  'px-2.5 py-1 rounded-md text-xs transition-all cursor-pointer select-none border',
                   previewLayer === 'converted'
-                    ? 'bg-[#739CBF] text-white shadow-2xs'
-                    : 'text-[#4A3F3D] hover:bg-[#EFE7E2]'
+                    ? 'bg-[#EEF4F9] text-[#2F658D] border-[#C4D6E5] font-bold shadow-2xs'
+                    : 'text-[#4A3F3D] font-semibold border-transparent hover:bg-[#EFE7E2]'
                 ]"
                 @click="emit('update:previewLayer', 'converted')"
               >
@@ -268,10 +285,10 @@ function grantMaterialsToPlayer() {
               <button
                 type="button"
                 :class="[
-                  'px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer select-none',
+                  'px-2.5 py-1 rounded-md text-xs transition-all cursor-pointer select-none border',
                   previewLayer === 'original'
-                    ? 'bg-[#739CBF] text-white shadow-2xs'
-                    : 'text-[#4A3F3D] hover:bg-[#EFE7E2]'
+                    ? 'bg-[#EEF4F9] text-[#2F658D] border-[#C4D6E5] font-bold shadow-2xs'
+                    : 'text-[#4A3F3D] font-semibold border-transparent hover:bg-[#EFE7E2]'
                 ]"
                 @click="emit('update:previewLayer', 'original')"
               >
@@ -281,7 +298,7 @@ function grantMaterialsToPlayer() {
           </div>
 
           <!-- 抖动与透明开关 -->
-          <div class="flex items-center gap-4 flex-wrap">
+          <div class="flex items-center gap-3.5 flex-wrap">
             <label class="flex items-center gap-2 cursor-pointer text-xs font-semibold text-[#4A3F3D]">
               <Switch
                 :checked="dithering"
@@ -306,218 +323,237 @@ function grantMaterialsToPlayer() {
           :repository="repository"
           @update:options="emit('update:options', $event)"
         />
-
-        <!-- 转换统计与操作按钮 -->
-        <div class="pt-2 border-t border-[#EADFD9]/70 flex items-center justify-between gap-2 flex-wrap">
-          <div class="text-[11px] text-[#8E807C] flex items-center gap-x-3 gap-y-1 flex-wrap">
-            <span>
-              已填充 <strong class="text-[#4A3F3D]">{{ result.filledCells.toLocaleString() }}</strong> 格
-              <template v-if="result.skippedCells > 0">（跳过透明 {{ result.skippedCells }} 格）</template>
-            </span>
-            <span>
-              材料 <strong class="text-[#4A3F3D]">{{ result.bom.length }}</strong> 种
-            </span>
-            <span v-if="result.paintedCells > 0">
-              耗漆 <strong class="text-[#4A3F3D]">{{ result.paintedCells.toLocaleString() }}</strong> 桶
-            </span>
-            <span class="font-mono">耗时 {{ result.durationMs }}ms</span>
-          </div>
-
-          <div class="flex items-center gap-1.5 flex-wrap">
-            <Button
-              variant="outline"
-              size="sm"
-              class="h-8 text-xs font-semibold border-[#EADFD9] text-[#4A3F3D] hover:bg-[#F9D6DB]/40 px-2.5 gap-1.5"
-              @click="copyBomText"
-            >
-              <Copy class="w-3.5 h-3.5 text-[#739CBF]" />
-              <span>复制清单</span>
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              class="h-8 text-xs font-semibold border-[#EADFD9] text-[#4A3F3D] hover:bg-[#F9D6DB]/40 px-2.5 gap-1.5"
-              :disabled="exportingBlueprint"
-              @click="downloadBlueprint"
-            >
-              <Download class="w-3.5 h-3.5 text-[#739CBF]" />
-              <span>{{ exportingBlueprint ? '生成中…' : '导出图纸 PNG' }}</span>
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              class="h-8 text-xs font-semibold border-[#EADFD9] text-[#4A3F3D] hover:bg-[#F9D6DB]/40 px-2.5 gap-1.5"
-              @click="downloadRawPixelPng"
-            >
-              <Download class="w-3.5 h-3.5" />
-              <span>1:1 像素图</span>
-            </Button>
-
-            <Button
-              v-if="store.player"
-              variant="default"
-              size="sm"
-              class="h-8 text-xs font-bold bg-[#739CBF] hover:bg-[#5f87a8] text-white px-3 gap-1.5"
-              :title="`将清单中的所有方块、墙壁和油漆放入当前角色背包与仓库（当前空位 ${availableEmptySlotCount} 格）`"
-              @click="grantMaterialsToPlayer"
-            >
-              <PackagePlus class="w-3.5 h-3.5" />
-              <span>放入「{{ store.player.name }}」背包（空位 {{ availableEmptySlotCount }}）</span>
-            </Button>
-          </div>
-        </div>
       </CardContent>
     </Card>
 
-    <!-- 油漆汇总条 -->
-    <Card v-if="paintSummaries.length > 0" class="border-[#EADFD9]">
-      <CardContent class="p-3 flex flex-col gap-2">
-        <div class="text-xs font-bold text-[#4A3F3D]">油漆消耗汇总</div>
-        <div class="flex items-center gap-2 flex-wrap">
-          <div
-            v-for="p in paintSummaries"
-            :key="p.paintId"
-            class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-[#FFF7F2] border border-[#EADFD9] text-xs"
-          >
-            <span :style="{ ...getItemSpriteStyle(p.paintItemId, 16), imageRendering: 'pixelated' }"></span>
-            <span class="font-semibold text-[#4A3F3D]">{{ p.paintName }}</span>
-            <span class="font-mono text-[#739CBF] font-bold">×{{ p.count }}</span>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-
-    <!-- 方块/墙壁材料统计清单 -->
+    <!-- 区块 2：导出与材料清单 -->
     <Card class="border-[#EADFD9]">
-      <CardContent class="p-3.5 sm:p-4 flex flex-col gap-2.5">
+      <CardHeader class="p-3.5 pb-2 flex flex-col gap-2">
         <div class="flex items-center justify-between gap-2 flex-wrap">
-          <h3 class="text-xs sm:text-sm font-bold text-[#4A3F3D]">材料采购清单</h3>
-          <div class="flex items-center gap-2 flex-wrap">
-            <button
-              v-if="(options.filterMode ?? 'exclude') === 'exclude' && result.bom.length > 12"
-              type="button"
-              class="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-lg bg-[#FFF7F2] border border-[#739CBF]/45 text-[#2F658D] font-semibold hover:bg-[#739CBF]/10 cursor-pointer"
-              title="提取当前用量最高的 12 种主要材料，切换为只用自选模式重算整图"
-              @click="focusTopBomAsInclude"
+          <CardTitle class="text-xs font-bold text-[#4A3F3D] flex items-center gap-1.5">
+            <span :style="{ ...getItemSpriteStyle(149, 14), imageRendering: 'pixelated' }"></span>
+            <span>导出与材料清单</span>
+          </CardTitle>
+          <div class="text-[11px] flex items-center gap-1.5 flex-wrap">
+            <span class="px-2 py-0.5 rounded-md bg-[#F9D6DB]/45 border border-[#E598A3]/50 text-[#4A3F3D] font-semibold">
+              已填充 {{ result.filledCells.toLocaleString() }} 格
+            </span>
+            <span class="px-2 py-0.5 rounded-md bg-[#FFF7F2] border border-[#EADFD9] text-[#4A3F3D] font-semibold">
+              {{ result.bom.length }} 种材料
+            </span>
+            <span v-if="result.paintedCells > 0" class="px-2 py-0.5 rounded-md bg-[#EEF4F9] border border-[#C4D6E5] text-[#2F658D] font-semibold">
+              耗漆 {{ result.paintedCells.toLocaleString() }} 桶
+            </span>
+            <span class="text-[#8E807C] font-mono">{{ result.durationMs }}ms</span>
+          </div>
+        </div>
+      </CardHeader>
+
+      <CardContent class="p-3.5 pt-0 flex flex-col gap-3">
+        <!-- 导出与写入操作按钮 -->
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <Button
+            variant="outline"
+            size="sm"
+            class="h-8 text-xs font-semibold border-[#EADFD9] bg-white text-[#4A3F3D] hover:bg-[#F9D6DB]/40 px-2.5 gap-1.5"
+            @click="copyBomText"
+          >
+            <Copy class="w-3.5 h-3.5 text-[#739CBF]" />
+            <span>复制清单</span>
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            class="h-8 text-xs font-semibold border-[#EADFD9] bg-white text-[#4A3F3D] hover:bg-[#F9D6DB]/40 px-2.5 gap-1.5"
+            :disabled="exportingBlueprint"
+            @click="downloadBlueprint"
+          >
+            <Download class="w-3.5 h-3.5 text-[#739CBF]" />
+            <span>{{ exportingBlueprint ? '生成中…' : '导出图纸 PNG' }}</span>
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            class="h-8 text-xs font-semibold border-[#EADFD9] bg-white text-[#4A3F3D] hover:bg-[#F9D6DB]/40 px-2.5 gap-1.5"
+            @click="downloadRawPixelPng"
+          >
+            <Download class="w-3.5 h-3.5" />
+            <span>1:1 像素图</span>
+          </Button>
+
+          <Button
+            v-if="store.player"
+            variant="default"
+            size="sm"
+            class="h-8 text-xs font-bold bg-[#739CBF] hover:bg-[#5f87a8] text-white px-3 gap-1.5"
+            :title="`将清单中的所有方块、墙壁和油漆放入当前角色背包与仓库（当前空位 ${availableEmptySlotCount} 格）`"
+            @click="grantMaterialsToPlayer"
+          >
+            <PackagePlus class="w-3.5 h-3.5" />
+            <span>放入「{{ store.player.name }}」背包（空位 {{ availableEmptySlotCount }}）</span>
+          </Button>
+        </div>
+
+        <!-- 油漆汇总条 -->
+        <div v-if="paintSummaries.length > 0" class="bg-[#FFF7F2] border border-[#EADFD9] rounded-xl p-2.5 flex flex-col gap-1.5">
+          <div class="text-[11px] font-bold text-[#4A3F3D]">油漆消耗汇总</div>
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <div
+              v-for="p in paintSummaries"
+              :key="p.paintId"
+              class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white border border-[#EADFD9] text-xs"
             >
-              <Sparkles class="w-3 h-3" />
-              <span>提取前12种入自选重算</span>
-            </button>
-            <span class="text-[11px] text-[#8E807C]">按用量排序（支持加自选或屏蔽）</span>
+              <span :style="{ ...getItemSpriteStyle(p.paintItemId, 16), imageRendering: 'pixelated' }"></span>
+              <span class="font-semibold text-[#4A3F3D]">{{ p.paintName }}</span>
+              <span class="font-mono text-[#2F658D] font-bold">×{{ p.count }}</span>
+            </div>
           </div>
         </div>
 
-        <div
-          v-if="result.bom.length === 0"
-          class="bg-[#FFF7F2] border border-[#EADFD9] rounded-xl py-8 px-4 text-center text-xs text-[#8E807C] flex flex-col items-center gap-2"
-        >
-          <span>
-            {{
-              (options.filterMode ?? 'exclude') === 'include' && includedSet.size === 0
-                ? '当前处于「只用自选」模式但清单为空，请先点击「管理清单 / 导入导出」添加材料。'
-                : '当前筛选条件下无可用材料输出。'
-            }}
-          </span>
-          <button
-            v-if="(options.filterMode ?? 'exclude') === 'include'"
-            type="button"
-            class="text-[11px] px-2.5 py-1 rounded-lg bg-white border border-[#EADFD9] text-[#4A3F3D] font-semibold hover:bg-[#F9D6DB]/40 cursor-pointer"
-            @click="emit('update:options', { ...options, filterMode: 'exclude' })"
-          >
-            切回全库排除
-          </button>
-        </div>
-
-        <div
-          v-else
-          class="bg-white border border-[#EADFD9] rounded-xl divide-y divide-[#EADFD9]/70 max-h-[400px] overflow-y-auto"
-        >
-          <div
-            v-for="b in result.bom"
-            :key="b.key"
-            class="px-3 py-2 flex items-center gap-2.5 hover:bg-[#FFF7F2] transition-colors"
-          >
-            <div
-              class="w-6 h-6 rounded-full border border-[#EADFD9] shrink-0"
-              :style="{ backgroundColor: `#${b.hex}` }"
-            ></div>
-
-            <div class="relative w-8 h-8 rounded-lg bg-[#FFF7F2] border border-[#EADFD9] flex items-center justify-center shrink-0">
-              <span :style="{ ...getItemSpriteStyle(b.material.itemId, 24), imageRendering: 'pixelated' }"></span>
-              <span
-                v-if="b.paintItemId"
-                class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-white border border-[#EADFD9] flex items-center justify-center shadow-2xs"
-                :title="b.paintName"
+        <!-- 方块/墙壁材料统计清单 -->
+        <div class="flex flex-col gap-2">
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <span class="text-xs font-bold text-[#4A3F3D]">材料采购清单</span>
+            <div class="flex items-center gap-2 flex-wrap">
+              <div
+                v-if="(options.filterMode ?? 'exclude') === 'exclude' && distinctBomMaterialCount > 1"
+                class="inline-flex items-center gap-1 rounded-lg bg-[#FFF7F2] border border-[#C4D6E5] p-0.5 pl-2 text-[11px] text-[#4A3F3D]"
               >
-                <span :style="{ ...getItemSpriteStyle(b.paintItemId, 12), imageRendering: 'pixelated' }"></span>
-              </span>
-            </div>
-
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-1.5 flex-wrap">
-                <span class="text-xs font-bold text-[#4A3F3D] truncate">{{ b.material.name }}</span>
-                <span
-                  :class="[
-                    'text-[10px] px-1.5 py-0 rounded font-semibold border',
-                    b.material.kind === 'tile'
-                      ? 'bg-[#739CBF]/10 text-[#2F658D] border-[#739CBF]/30'
-                      : 'bg-[#F9D6DB]/60 text-[#4A3F3D] border-[#E598A3]/50'
-                  ]"
+                <span>提取前</span>
+                <input
+                  v-model.number="topExtractCount"
+                  type="number"
+                  min="1"
+                  :max="Math.max(1, distinctBomMaterialCount)"
+                  class="w-11 h-5.5 text-center font-mono text-[11px] font-bold rounded border border-[#EADFD9] bg-white text-[#4A3F3D] outline-none focus:border-[#739CBF]"
+                  @keydown.enter="focusTopBomAsInclude"
+                />
+                <span>种</span>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md bg-[#EEF4F9] text-[#2F658D] font-semibold hover:bg-[#DCE9F4] cursor-pointer transition-colors"
+                  title="提取当前用量最高的指定数量主要材料，切换为只用自选模式重算整图"
+                  @click="focusTopBomAsInclude"
                 >
-                  {{ b.material.kind === 'tile' ? '方块' : '墙壁' }}
-                </span>
-              </div>
-              <div class="text-[11px] font-mono text-[#5E504D] mt-0.5 truncate">
-                物品ID {{ b.material.itemId }}-{{ b.paintName }}-#{{ b.hex }}
+                  <Sparkles class="w-3 h-3" />
+                  <span>入自选重算</span>
+                </button>
               </div>
             </div>
+          </div>
 
-            <div class="text-right shrink-0">
-              <div class="text-xs font-bold font-mono text-[#4A3F3D] tabular-nums">
-                {{ formatStacks(b.count, b.material.itemId) }}
-              </div>
-            </div>
-
+          <div
+            v-if="result.bom.length === 0"
+            class="bg-[#FFF7F2] border border-[#EADFD9] rounded-xl py-8 px-4 text-center text-xs text-[#8E807C] flex flex-col items-center gap-2"
+          >
+            <span>
+              {{
+                (options.filterMode ?? 'exclude') === 'include' && includedSet.size === 0
+                  ? '当前「自选」清单为空，请点击「管理清单」添加材料。'
+                  : '当前筛选条件下无可用材料输出。'
+              }}
+            </span>
             <button
               v-if="(options.filterMode ?? 'exclude') === 'include'"
               type="button"
-              class="p-1.5 rounded-lg text-[#8E807C] hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer shrink-0"
-              title="从自选清单移出并重算整图"
-              @click="toggleIncludeBom(b)"
+              class="text-[11px] px-2.5 py-1 rounded-lg bg-white border border-[#EADFD9] text-[#4A3F3D] font-semibold hover:bg-[#F9D6DB]/40 cursor-pointer"
+              @click="emit('update:options', { ...options, filterMode: 'exclude' })"
             >
-              <X class="w-3.5 h-3.5" />
+              切回全库
             </button>
+          </div>
 
-            <template v-else>
+          <div
+            v-else
+            class="bg-white border border-[#EADFD9] rounded-xl divide-y divide-[#EADFD9]/70 max-h-[400px] overflow-y-auto"
+          >
+            <div
+              v-for="b in result.bom"
+              :key="b.key"
+              class="px-3 py-2 flex items-center gap-2.5 hover:bg-[#FFF7F2] transition-colors"
+            >
+              <div
+                class="w-6 h-6 rounded-lg border border-[#EADFD9] shrink-0"
+                :style="{ backgroundColor: `#${b.hex}` }"
+              ></div>
+
+              <div class="relative w-8 h-8 rounded-lg bg-[#EFE7E2] border border-[#EADFD9] flex items-center justify-center shrink-0">
+                <span :style="{ ...getItemSpriteStyle(b.material.itemId, 24), imageRendering: 'pixelated' }"></span>
+                <span
+                  v-if="b.paintItemId"
+                  class="absolute -bottom-1 -right-1 w-4 h-4 rounded-md bg-white border border-[#EADFD9] flex items-center justify-center shadow-2xs"
+                  :title="b.paintName"
+                >
+                  <span :style="{ ...getItemSpriteStyle(b.paintItemId, 12), imageRendering: 'pixelated' }"></span>
+                </span>
+              </div>
+
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="text-xs font-bold text-[#4A3F3D] truncate">{{ b.material.name }}</span>
+                  <span
+                    :class="[
+                      'text-[10px] px-1.5 py-0 rounded font-semibold border',
+                      b.material.kind === 'tile'
+                        ? 'bg-[#EEF4F9] text-[#2F658D] border-[#C4D6E5]'
+                        : 'bg-[#F9D6DB]/60 text-[#4A3F3D] border-[#E598A3]/50'
+                    ]"
+                  >
+                    {{ b.material.kind === 'tile' ? '方块' : '墙壁' }}
+                  </span>
+                </div>
+                <div class="text-[11px] font-mono text-[#5E504D] mt-0.5 truncate">
+                  物品ID {{ b.material.itemId }}-{{ b.paintName }}-#{{ b.hex }}
+                </div>
+              </div>
+
+              <div class="text-right shrink-0">
+                <div class="text-xs font-bold font-mono text-[#4A3F3D] tabular-nums">
+                  {{ formatStacks(b.count, b.material.itemId) }}
+                </div>
+              </div>
+
               <button
+                v-if="(options.filterMode ?? 'exclude') === 'include'"
                 type="button"
-                :class="[
-                  'p-1.5 rounded-lg transition-colors cursor-pointer shrink-0',
-                  includedSet.has(materialKey(b.material))
-                    ? 'bg-[#739CBF]/15 text-[#739CBF] hover:bg-rose-50 hover:text-rose-600'
-                    : 'text-[#8E807C] hover:text-[#2F658D] hover:bg-[#739CBF]/10'
-                ]"
-                :title="includedSet.has(materialKey(b.material)) ? '已在自选清单（点击取消）' : '加入自选清单'"
+                class="p-1.5 rounded-lg text-[#8E807C] hover:text-[#B84A5A] hover:bg-[#FDECEF] transition-colors cursor-pointer shrink-0"
+                title="从自选清单移出并重算整图"
                 @click="toggleIncludeBom(b)"
               >
-                <Star
-                  v-if="includedSet.has(materialKey(b.material))"
-                  class="w-3.5 h-3.5 fill-current"
-                />
-                <Plus v-else class="w-3.5 h-3.5" />
+                <X class="w-3.5 h-3.5" />
               </button>
 
-              <button
-                type="button"
-                class="p-1.5 rounded-lg text-[#8E807C] hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer shrink-0"
-                title="屏蔽此材料并重新生成整图"
-                @click="excludeBomMaterial(b)"
-              >
-                <Ban class="w-3.5 h-3.5" />
-              </button>
-            </template>
+              <template v-else>
+                <button
+                  type="button"
+                  :class="[
+                    'p-1.5 rounded-lg transition-colors cursor-pointer shrink-0',
+                    includedSet.has(materialKey(b.material))
+                      ? 'bg-[#EEF4F9] text-[#2F658D] hover:bg-[#FDECEF] hover:text-[#B84A5A]'
+                      : 'text-[#8E807C] hover:text-[#2F658D] hover:bg-[#EEF4F9]'
+                  ]"
+                  :title="includedSet.has(materialKey(b.material)) ? '已在自选清单（点击取消）' : '加入自选清单'"
+                  @click="toggleIncludeBom(b)"
+                >
+                  <Star
+                    v-if="includedSet.has(materialKey(b.material))"
+                    class="w-3.5 h-3.5 fill-current"
+                  />
+                  <Plus v-else class="w-3.5 h-3.5" />
+                </button>
+
+                <button
+                  type="button"
+                  class="p-1.5 rounded-lg text-[#8E807C] hover:text-[#B84A5A] hover:bg-[#FDECEF] transition-colors cursor-pointer shrink-0"
+                  title="屏蔽此材料并重新生成整图"
+                  @click="excludeBomMaterial(b)"
+                >
+                  <Ban class="w-3.5 h-3.5" />
+                </button>
+              </template>
+            </div>
           </div>
         </div>
       </CardContent>

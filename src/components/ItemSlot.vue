@@ -148,24 +148,24 @@ function onTouchStart(e: TouchEvent) {
 
   if (touchTimer) clearTimeout(touchTimer);
 
-  // 若格子内有物品，轻按 160ms 触发抓取（给 160ms 的滚动滑动判定窗口）
-  if (props.item.id > 0) {
-    touchTimer = setTimeout(() => {
-      isTouchDragging = true;
-      if (typeof navigator !== "undefined" && navigator.vibrate) {
-        navigator.vibrate(30);
-      }
-      startDrag(
-        props.slotType,
-        props.index,
-        props.item,
-        props.loadoutIdx,
-        currentTouchX,
-        currentTouchY,
-        true
-      );
-    }, 160);
-  }
+    // 若格子内有物品，长按 420ms 触发抓取（避免轻点快捷栏/背包时误触发拖拽）
+    if (props.item.id > 0) {
+      touchTimer = setTimeout(() => {
+        isTouchDragging = true;
+        if (typeof navigator !== "undefined" && navigator.vibrate) {
+          navigator.vibrate(30);
+        }
+        startDrag(
+          props.slotType,
+          props.index,
+          props.item,
+          props.loadoutIdx,
+          currentTouchX,
+          currentTouchY,
+          true
+        );
+      }, 420);
+    }
 
   window.addEventListener("touchmove", onWindowTouchMove, { passive: false });
   window.addEventListener("touchend", onWindowTouchEnd, { passive: false });
@@ -213,6 +213,8 @@ function onWindowTouchEnd(e: TouchEvent) {
     endDrag(t.clientX, t.clientY);
     isTouchDragging = false;
   } else if (!touchMovedFar) {
+    // 阻止手机浏览器在打开弹窗后补发合成 click 误点到下方物品库
+    if (e.cancelable) e.preventDefault();
     // 未拖拽且未滑动页面，判定为轻触点击（查看/编辑属性）
     handleSlotClick(props.slotType, props.index, props.loadoutIdx);
   }
@@ -258,11 +260,11 @@ onUnmounted(() => {
       isBeingDragged
         ? 'opacity-40 scale-95 border-dashed border-[#739CBF] bg-[#EFE7E2]'
         : isHoverTarget
-          ? 'border-[#739CBF] bg-[#F9D6DB] ring-2 ring-[#739CBF] scale-105 z-20 shadow-md animate-pulse'
+          ? 'border-[#E598A3] bg-[#F9D6DB] ring-2 ring-[#E598A3] scale-105 z-20 shadow-md'
           : isMoveSource
-            ? 'border-rose-400 bg-rose-100/80 ring-2 ring-rose-400 animate-pulse scale-105 z-20 shadow-md'
+            ? 'border-[#E598A3] bg-[#F9D6DB]/90 ring-2 ring-[#E598A3] scale-105 z-20 shadow-md'
             : isSelected
-              ? 'border-[#E598A3] bg-[#F9D6DB] ring-2 ring-[#E598A3] shadow-sm scale-105 z-10'
+              ? 'border-[#739CBF] bg-[#EEF4F9] ring-2 ring-[#739CBF]/65 shadow-sm scale-105 z-10'
               : item.favorited
                 ? 'border-amber-400 bg-amber-50/80 ring-1 ring-amber-400/60 hover:bg-amber-100/80 shadow-2xs'
                 : 'border-[#EADFD9] bg-[#EFE7E2] hover:bg-[#E8DFD9] shadow-2xs'

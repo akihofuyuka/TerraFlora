@@ -42,7 +42,7 @@ import logoUrl from '../../../public/logo.png';
                   @click="setGuideSubTab('converter')"
                 >
                   <ArrowUpDown class="w-3.5 h-3.5" />
-                  <span>地图签名互转</span>
+                  <span>地图存档</span>
                 </button>
               </div>
             </div>
@@ -84,7 +84,7 @@ import logoUrl from '../../../public/logo.png';
             @click="setGuideSubTab('converter')"
           >
             <ArrowUpDown class="w-3.5 h-3.5" />
-            <span>地图签名互转</span>
+            <span>地图存档</span>
           </button>
         </div>
       </div>

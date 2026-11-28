@@ -21,16 +21,20 @@ tools/gamedump/obj/
 raw_data/
 scripts/*-raw.json
 
-# Local documentation & notes (unpushed)
+# Local documentation, notes & screenshots (unpushed)
 DESIGN.md
 AVATAR_RENDER.md
+效果图/
 
 # Dev test pages & temp saves (never committed, never deployed)
 dev/
 src/dev/
 *.plr
 !src/core/__tests__/fixtures/*.plr
+*.wld
+*.twld
 *.bak
+*.bak2
 *.apk
 
 # Environment variables

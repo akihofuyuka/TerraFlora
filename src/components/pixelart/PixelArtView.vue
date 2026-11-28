@@ -14,10 +14,12 @@ import {
   EyeOff,
   Grid2x2Check,
   ImagePlus,
+  Moon,
   Move,
   Pipette,
   RotateCcw,
   SlidersHorizontal,
+  Sun,
   ZoomIn,
   ZoomOut,
 } from 'lucide-vue-next';
@@ -59,6 +61,9 @@ import PixelArtBatchPanel from './PixelArtBatchPanel.vue';
 
 type InputMode = 'color' | 'image';
 type PanelTool = 'move' | 'pick';
+type CanvasBackdrop = 'paper' | 'charcoal';
+
+const canvasBackdrop = ref<CanvasBackdrop>('paper');
 
 const RECENT_COLORS_KEY = 'terraflora_pixelart_recent_colors';
 const EXCLUDED_MATERIALS_KEY = 'terraflora_pixelart_excluded_materials';
@@ -444,22 +449,49 @@ function drawViewer() {
   if (!ctx) return;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  ctx.fillStyle = '#1B1B1B';
+  const isCharcoal = canvasBackdrop.value === 'charcoal';
+  ctx.fillStyle = isCharcoal ? '#3B3331' : '#FFF7F2';
   ctx.fillRect(0, 0, boxW, boxH);
 
   // scale 为每 1 图格占用的屏幕 CSS 像素数
   const scale = boxW / vp.visibleW;
+  const imgX = -vp.originX * scale;
+  const imgY = -vp.originY * scale;
+  const imgW = curPlan.columns * scale;
+  const imgH = curPlan.rows * scale;
+
+  // 在图像区域内绘制低对比暖色棋盘格，衬托透明与浅色像素
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(imgX, imgY, imgW, imgH);
+  ctx.clip();
+  const checkerSize = 12;
+  const xStart = Math.max(0, Math.floor(imgX / checkerSize) * checkerSize);
+  const yStart = Math.max(0, Math.floor(imgY / checkerSize) * checkerSize);
+  const xEnd = Math.min(boxW, imgX + imgW);
+  const yEnd = Math.min(boxH, imgY + imgH);
+  ctx.fillStyle = isCharcoal ? '#463D3B' : '#F3EAE4';
+  for (let cy = yStart; cy < yEnd; cy += checkerSize) {
+    const rowParity = Math.floor(cy / checkerSize) & 1;
+    for (let cx = xStart; cx < xEnd; cx += checkerSize) {
+      const colParity = Math.floor(cx / checkerSize) & 1;
+      if ((rowParity ^ colParity) === 1) {
+        ctx.fillRect(cx, cy, checkerSize, checkerSize);
+      }
+    }
+  }
+  ctx.restore();
+
   ctx.imageSmoothingEnabled = scale < 1;
-  ctx.drawImage(
-    dispCanvas,
-    -vp.originX * scale,
-    -vp.originY * scale,
-    curPlan.columns * scale,
-    curPlan.rows * scale
-  );
+  ctx.drawImage(dispCanvas, imgX, imgY, imgW, imgH);
+
+  // 图像外缘 1px 暖灰描边
+  ctx.strokeStyle = isCharcoal ? '#5A4E4B' : '#D8C8C0';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(imgX, imgY, imgW, imgH);
 
   if (scale >= 4) {
-    ctx.strokeStyle = 'rgba(160, 160, 160, 0.42)';
+    ctx.strokeStyle = isCharcoal ? 'rgba(234, 223, 217, 0.32)' : 'rgba(142, 128, 124, 0.35)';
     ctx.lineWidth = 1 / dpr;
     ctx.beginPath();
     const firstCol = Math.max(0, Math.floor(vp.originX));
@@ -482,7 +514,7 @@ function drawViewer() {
   if (panelTool.value === 'pick' && hoverCell.value) {
     const hx = (hoverCell.value.col - vp.originX) * scale;
     const hy = (hoverCell.value.row - vp.originY) * scale;
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+    ctx.strokeStyle = isCharcoal ? 'rgba(255, 247, 242, 0.9)' : '#2F658D';
     ctx.lineWidth = 1.5;
     ctx.strokeRect(hx, hy, scale, scale);
   }
@@ -493,7 +525,7 @@ function drawViewer() {
     const y0 = Math.max(picked.value.row, vp.originY);
     const y1 = Math.min(picked.value.row + 1, vp.originY + vp.visibleH);
     if (x1 > x0 && y1 > y0) {
-      ctx.strokeStyle = '#FF3B30';
+      ctx.strokeStyle = '#D9536A';
       ctx.lineWidth = 2;
       ctx.strokeRect(
         (x0 - vp.originX) * scale,
@@ -525,12 +557,15 @@ function drawOverview() {
   if (!ctx) return;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  ctx.fillStyle = '#1B1B1B';
+  const isCharcoal = canvasBackdrop.value === 'charcoal';
+  ctx.fillStyle = isCharcoal ? '#3B3331' : '#FFF7F2';
   ctx.fillRect(0, 0, boxW, boxH);
 
   const box = letterbox(boxW, boxH, curPlan.columns, curPlan.rows);
   if (box.width <= 0 || box.height <= 0) return;
 
+  ctx.fillStyle = isCharcoal ? '#463D3B' : '#EFE7E2';
+  ctx.fillRect(box.left, box.top, box.width, box.height);
   ctx.imageSmoothingEnabled = dispCanvas.width > box.width;
   ctx.drawImage(dispCanvas, box.left, box.top, box.width, box.height);
 
@@ -541,7 +576,7 @@ function drawOverview() {
   const vy0 = Math.max(0, vp.originY);
   const vy1 = Math.min(curPlan.rows, vp.originY + vp.visibleH);
   if (vx1 > vx0 && vy1 > vy0) {
-    ctx.strokeStyle = '#FF3B30';
+    ctx.strokeStyle = '#D9536A';
     ctx.lineWidth = 2;
     ctx.strokeRect(
       box.left + vx0 * sx,
@@ -553,11 +588,11 @@ function drawOverview() {
 }
 
 watch(
-  [plan, activeDisplayCanvas, viewport, viewerSize, panelTool, picked, hoverCell],
+  [plan, activeDisplayCanvas, viewport, viewerSize, panelTool, picked, hoverCell, canvasBackdrop],
   () => drawViewer(),
   { deep: true }
 );
-watch([plan, activeDisplayCanvas, viewport, overviewSize, showOverview], () => drawOverview(), {
+watch([plan, activeDisplayCanvas, viewport, overviewSize, showOverview, canvasBackdrop], () => drawOverview(), {
   deep: true,
 });
 
@@ -847,16 +882,16 @@ onUnmounted(() => {
 
 <template>
   <div class="flex flex-col gap-3 md:gap-4 flex-1">
-    <!-- 顶部子导航栏 -->
-    <div class="bg-white border border-[#EADFD9] rounded-xl px-3 py-1.5 flex items-center justify-between gap-2 flex-wrap shadow-xs">
-      <div class="flex items-center gap-1.5">
+    <!-- 顶部二级导航栏 -->
+    <div class="flex flex-col gap-2">
+      <nav class="bg-white border border-[#EADFD9] rounded-xl p-1.5 grid grid-cols-2 gap-1.5 shadow-2xs select-none">
         <button
           type="button"
           :class="[
-            'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer select-none',
+            'flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs whitespace-nowrap transition-all duration-150 cursor-pointer border',
             mode === 'color'
-              ? 'bg-[#739CBF] text-white shadow-xs'
-              : 'text-[#4A3F3D] hover:bg-[#EFE7E2]'
+              ? 'bg-[#EEF4F9] text-[#2F658D] border-[#C4D6E5] font-bold shadow-2xs'
+              : 'text-[#4A3F3D] font-semibold border-transparent hover:bg-[#EFE7E2]/70'
           ]"
           @click="mode = 'color'"
         >
@@ -867,26 +902,17 @@ onUnmounted(() => {
         <button
           type="button"
           :class="[
-            'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer select-none',
+            'flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs whitespace-nowrap transition-all duration-150 cursor-pointer border',
             mode === 'image'
-              ? 'bg-[#739CBF] text-white shadow-xs'
-              : 'text-[#4A3F3D] hover:bg-[#EFE7E2]'
+              ? 'bg-[#EEF4F9] text-[#2F658D] border-[#C4D6E5] font-bold shadow-2xs'
+              : 'text-[#4A3F3D] font-semibold border-transparent hover:bg-[#EFE7E2]/70'
           ]"
           @click="mode = 'image'"
         >
           <span :style="{ ...getItemSpriteStyle(149, 16), imageRendering: 'pixelated' }"></span>
           <span>图片取色 / 整图转换</span>
         </button>
-      </div>
-
-      <div v-if="repository" class="text-[11px] text-[#8E807C] flex items-center gap-1.5">
-        <span class="px-1.5 py-0.5 rounded bg-[#FFF7F2] border border-[#EADFD9] font-mono">
-          {{ repository.gameVersion || '1.4.5' }}
-        </span>
-        <span>
-          默认 {{ repository.defaultCount }} 种（含扩展共 {{ repository.materials.length }} 种）· 30 种漆
-        </span>
-      </div>
+      </nav>
     </div>
 
     <!-- 材料库加载 / 失败状态 -->
@@ -916,15 +942,12 @@ onUnmounted(() => {
         <CardContent class="p-4 flex flex-col gap-3.5">
           <div class="flex items-center gap-2">
             <span :style="{ ...getItemSpriteStyle(1071, 18), imageRendering: 'pixelated' }"></span>
-            <div>
-              <h2 class="text-sm font-bold text-[#4A3F3D]">输入目标色号</h2>
-              <p class="text-[11px] text-[#8E807C]">支持十六进制色号与原生调色盘选色</p>
-            </div>
+            <h2 class="text-sm font-bold text-[#4A3F3D]">输入目标色号</h2>
           </div>
 
           <div class="flex items-center gap-2">
             <label
-              class="relative w-10 h-10 rounded-full border-2 border-white ring-1 ring-[#EADFD9] shadow-xs shrink-0 cursor-pointer overflow-hidden"
+              class="relative w-10 h-10 rounded-lg border-2 border-white ring-1 ring-[#EADFD9] shadow-xs shrink-0 cursor-pointer overflow-hidden"
               :style="{ backgroundColor: pickerColorValue }"
               title="点击打开调色盘选色"
             >
@@ -954,7 +977,7 @@ onUnmounted(() => {
             </Button>
           </div>
 
-          <p v-if="colorError" class="text-xs text-rose-600 font-medium">
+          <p v-if="colorError" class="text-xs text-[#B84A5A] font-medium">
             {{ colorError }}
           </p>
 
@@ -965,10 +988,10 @@ onUnmounted(() => {
                 v-for="hex in recentColors"
                 :key="hex"
                 type="button"
-                class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[#FFF7F2] border border-[#EADFD9] hover:bg-[#F9D6DB]/40 text-[11px] font-mono text-[#4A3F3D] cursor-pointer"
+                class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-[#FFF7F2] border border-[#EADFD9] hover:bg-[#F9D6DB]/40 text-[11px] font-mono text-[#4A3F3D] cursor-pointer"
                 @click="selectPreset(hex)"
               >
-                <span class="w-3 h-3 rounded-full border border-[#EADFD9]" :style="{ backgroundColor: `#${hex}` }"></span>
+                <span class="w-3 h-3 rounded-sm border border-[#EADFD9]" :style="{ backgroundColor: `#${hex}` }"></span>
                 <span>#{{ hex }}</span>
               </button>
             </div>
@@ -981,16 +1004,12 @@ onUnmounted(() => {
                 v-for="hex in colorPresets"
                 :key="hex"
                 type="button"
-                class="w-6 h-6 rounded-full border border-[#EADFD9] shadow-2xs hover:scale-110 transition-transform cursor-pointer"
+                class="w-6 h-6 rounded-lg border border-[#EADFD9] shadow-2xs hover:scale-110 transition-transform cursor-pointer"
                 :style="{ backgroundColor: `#${hex}` }"
                 :title="`#${hex}`"
                 @click="selectPreset(hex)"
               ></button>
             </div>
-          </div>
-
-          <div class="bg-[#FFF7F2] border border-[#EADFD9] rounded-xl p-3 text-[11px] text-[#8E807C] leading-relaxed">
-            输入 6 位十六进制色号实时匹配；点击结果复制信息，点屏蔽图标跳过该材料。
           </div>
         </CardContent>
       </Card>
@@ -1033,15 +1052,18 @@ onUnmounted(() => {
             @dragleave="isDragOver = false"
             @drop.prevent="onDropImage"
           >
-            <div class="w-12 h-12 rounded-2xl bg-white border border-[#EADFD9] flex items-center justify-center shadow-xs">
-              <ImagePlus v-if="!imageLoading" class="w-6 h-6 text-[#739CBF]" />
+            <div class="w-12 h-12 rounded-xl bg-[#F9D6DB]/35 border border-[#E598A3]/50 flex items-center justify-center shadow-2xs">
+              <div
+                v-if="!imageLoading"
+                :style="{ ...getItemSpriteStyle(1071, 32), imageRendering: 'pixelated' }"
+              ></div>
               <div v-else class="w-5 h-5 border-2 border-[#EADFD9] border-t-[#739CBF] rounded-full animate-spin"></div>
             </div>
             <div class="text-sm font-bold text-[#739CBF]">
               {{ imageLoading ? '正在解码图片…' : '点击、拖入图片或 Ctrl+V 粘贴' }}
             </div>
-            <p class="text-xs text-[#8E807C] max-w-md leading-relaxed">
-              支持逐格点选配色，或一键全图批量转换并生成材料清单与施工图纸。
+            <p class="text-xs text-[#8E807C]">
+              逐格取色 · 整图转施工图纸
             </p>
           </div>
 
@@ -1060,10 +1082,10 @@ onUnmounted(() => {
                 <button
                   type="button"
                   :class="[
-                    'flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer select-none',
+                    'flex items-center gap-1 px-2.5 py-1 rounded-md text-xs transition-all cursor-pointer select-none border',
                     panelTool === 'move'
-                      ? 'bg-[#739CBF] text-white shadow-2xs'
-                      : 'text-[#4A3F3D] hover:bg-[#EFE7E2]'
+                      ? 'bg-[#EEF4F9] text-[#2F658D] border-[#C4D6E5] font-bold shadow-2xs'
+                      : 'text-[#4A3F3D] font-semibold border-transparent hover:bg-[#EFE7E2]'
                   ]"
                   @click="panelTool = 'move'"
                 >
@@ -1073,10 +1095,10 @@ onUnmounted(() => {
                 <button
                   type="button"
                   :class="[
-                    'flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer select-none',
+                    'flex items-center gap-1 px-2.5 py-1 rounded-md text-xs transition-all cursor-pointer select-none border',
                     panelTool === 'pick'
-                      ? 'bg-[#739CBF] text-white shadow-2xs'
-                      : 'text-[#4A3F3D] hover:bg-[#EFE7E2]'
+                      ? 'bg-[#EEF4F9] text-[#2F658D] border-[#C4D6E5] font-bold shadow-2xs'
+                      : 'text-[#4A3F3D] font-semibold border-transparent hover:bg-[#EFE7E2]'
                   ]"
                   @click="panelTool = 'pick'"
                 >
@@ -1086,13 +1108,13 @@ onUnmounted(() => {
               </div>
 
               <Button
-                variant="outline"
+                :variant="batchMode ? 'outline' : 'default'"
                 size="sm"
                 :class="[
-                  'h-8 text-xs font-semibold px-2.5 gap-1.5',
+                  'h-8 text-xs font-bold px-3 gap-1.5 transition-all',
                   batchMode
-                    ? 'border-[#739CBF] bg-[#739CBF] text-white hover:bg-[#5f87a8]'
-                    : 'border-[#EADFD9] text-[#4A3F3D] hover:bg-[#F9D6DB]/40'
+                    ? 'border-[#E598A3] bg-[#F9D6DB]/70 text-[#4A3F3D] hover:bg-[#F9D6DB] shadow-2xs'
+                    : 'bg-[#739CBF] hover:bg-[#5f87a8] text-white border border-transparent shadow-xs'
                 ]"
                 @click="toggleBatchMode"
               >
@@ -1106,8 +1128,8 @@ onUnmounted(() => {
                 :class="[
                   'h-8 text-xs font-semibold px-2.5 gap-1.5',
                   showOverview
-                    ? 'border-[#739CBF] bg-[#739CBF]/10 text-[#2F658D]'
-                    : 'border-[#EADFD9] text-[#4A3F3D] hover:bg-[#F9D6DB]/40'
+                    ? 'border-[#EADFD9] bg-[#FFF7F2] text-[#4A3F3D] hover:bg-[#EFE7E2]/70'
+                    : 'border-[#EADFD9] bg-white text-[#8E807C] hover:bg-[#EFE7E2]/70'
                 ]"
                 @click="showOverview = !showOverview"
               >
@@ -1151,7 +1173,10 @@ onUnmounted(() => {
           <div :class="['flex flex-col gap-3 min-w-0', batchMode ? 'lg:sticky lg:top-20' : '']">
             <!-- 画布查看器 + 右侧缩略定位面板 -->
             <div
-              class="bg-[#1B1B1B] rounded-2xl border border-[#EADFD9] overflow-hidden shadow-sm flex h-[54vh] min-h-[320px] max-h-[640px]"
+              :class="[
+                'rounded-2xl border border-[#EADFD9] overflow-hidden shadow-sm flex h-[54vh] min-h-[320px] max-h-[640px] transition-colors',
+                canvasBackdrop === 'paper' ? 'bg-[#FFF7F2]' : 'bg-[#3B3331]'
+              ]"
               @dragover.prevent="isDragOver = true"
               @dragleave="isDragOver = false"
               @drop.prevent="onDropImage"
@@ -1172,18 +1197,18 @@ onUnmounted(() => {
                   @contextmenu.prevent
                 ></canvas>
 
-                <!-- 顶部右侧浮动图层对比切换（全图转换模式） -->
+                <!-- 顶部右侧浮动图层对比切换（暖米白磨砂） -->
                 <div
                   v-if="batchMode"
-                  class="absolute top-2.5 right-2.5 flex items-center bg-black/70 backdrop-blur-xs border border-white/20 rounded-xl p-0.5 gap-0.5 text-[11px] shadow-md"
+                  class="absolute top-2.5 right-2.5 flex items-center bg-[#FFF7F2]/90 backdrop-blur-md border border-[#EADFD9] rounded-xl p-0.5 gap-0.5 text-[11px] shadow-sm"
                 >
                   <button
                     type="button"
                     :class="[
-                      'px-2.5 py-1 rounded-lg font-semibold transition-all cursor-pointer select-none',
+                      'px-2.5 py-1 rounded-lg transition-all cursor-pointer select-none border',
                       previewLayer === 'converted'
-                        ? 'bg-[#739CBF] text-white'
-                        : 'text-white/80 hover:text-white'
+                        ? 'bg-[#EEF4F9] text-[#2F658D] border-[#C4D6E5] font-bold'
+                        : 'text-[#4A3F3D] font-semibold border-transparent hover:bg-[#EFE7E2]'
                     ]"
                     @click="previewLayer = 'converted'"
                   >
@@ -1192,10 +1217,10 @@ onUnmounted(() => {
                   <button
                     type="button"
                     :class="[
-                      'px-2.5 py-1 rounded-lg font-semibold transition-all cursor-pointer select-none',
+                      'px-2.5 py-1 rounded-lg transition-all cursor-pointer select-none border',
                       previewLayer === 'original'
-                        ? 'bg-[#739CBF] text-white'
-                        : 'text-white/80 hover:text-white'
+                        ? 'bg-[#EEF4F9] text-[#2F658D] border-[#C4D6E5] font-bold'
+                        : 'text-[#4A3F3D] font-semibold border-transparent hover:bg-[#EFE7E2]'
                     ]"
                     @click="previewLayer = 'original'"
                   >
@@ -1203,11 +1228,22 @@ onUnmounted(() => {
                   </button>
                 </div>
 
-                <!-- 底部右侧浮动缩放控制 -->
-                <div class="absolute bottom-2.5 right-2.5 flex items-center bg-black/70 backdrop-blur-xs border border-white/20 rounded-xl p-0.5 gap-0.5 text-white shadow-md">
+                <!-- 底部右侧浮动缩放与底色控制（暖米白磨砂） -->
+                <div class="absolute bottom-2.5 right-2.5 flex items-center bg-[#FFF7F2]/90 backdrop-blur-md border border-[#EADFD9] rounded-xl p-0.5 gap-0.5 text-[#4A3F3D] shadow-sm">
                   <button
                     type="button"
-                    class="p-1.5 rounded-lg hover:bg-white/15 transition-colors cursor-pointer"
+                    class="px-2 py-1 rounded-lg hover:bg-[#F9D6DB]/45 transition-colors cursor-pointer inline-flex items-center gap-1 text-[11px] font-semibold"
+                    :title="canvasBackdrop === 'paper' ? '切到暖炭底色（方便看浅色像素）' : '切回米白纸底'"
+                    @click="canvasBackdrop = canvasBackdrop === 'paper' ? 'charcoal' : 'paper'"
+                  >
+                    <Moon v-if="canvasBackdrop === 'paper'" class="w-3.5 h-3.5 text-[#739CBF]" />
+                    <Sun v-else class="w-3.5 h-3.5 text-[#E598A3]" />
+                    <span class="hidden sm:inline">{{ canvasBackdrop === 'paper' ? '纸底' : '暗底' }}</span>
+                  </button>
+                  <span class="w-px h-4 bg-[#EADFD9] mx-0.5"></span>
+                  <button
+                    type="button"
+                    class="p-1.5 rounded-lg hover:bg-[#EFE7E2] transition-colors cursor-pointer"
                     title="放大"
                     @click="zoomBy(1.4)"
                   >
@@ -1215,7 +1251,7 @@ onUnmounted(() => {
                   </button>
                   <button
                     type="button"
-                    class="p-1.5 rounded-lg hover:bg-white/15 transition-colors cursor-pointer"
+                    class="p-1.5 rounded-lg hover:bg-[#EFE7E2] transition-colors cursor-pointer"
                     title="缩小"
                     @click="zoomBy(1 / 1.4)"
                   >
@@ -1223,7 +1259,7 @@ onUnmounted(() => {
                   </button>
                   <button
                     type="button"
-                    class="p-1.5 rounded-lg hover:bg-white/15 transition-colors cursor-pointer"
+                    class="p-1.5 rounded-lg hover:bg-[#EFE7E2] transition-colors cursor-pointer"
                     title="适应屏幕"
                     @click="resetViewport"
                   >
@@ -1234,10 +1270,10 @@ onUnmounted(() => {
                 <!-- 桌面悬停 HUD -->
                 <div
                   v-if="hoverPreview"
-                  class="hidden sm:flex items-center gap-2 absolute bottom-2.5 left-2.5 bg-white/95 backdrop-blur-xs border border-[#EADFD9] rounded-xl px-2.5 py-1.5 shadow-md pointer-events-none text-xs text-[#4A3F3D]"
+                  class="hidden sm:flex items-center gap-2 absolute bottom-2.5 left-2.5 bg-[#FFF7F2]/95 backdrop-blur-md border border-[#EADFD9] rounded-xl px-2.5 py-1.5 shadow-sm pointer-events-none text-xs text-[#4A3F3D]"
                 >
                   <span
-                    class="w-4 h-4 rounded-full border border-[#EADFD9] shrink-0"
+                    class="w-4 h-4 rounded-md border border-[#EADFD9] shrink-0"
                     :style="{ backgroundColor: `#${hoverPreview.hex}` }"
                   ></span>
                   <span class="font-mono font-semibold">
@@ -1247,7 +1283,7 @@ onUnmounted(() => {
                     <span class="text-[#EADFD9]">|</span>
                     <span :style="{ ...getItemSpriteStyle(hoverPreview.topMatch.material.itemId, 16), imageRendering: 'pixelated' }"></span>
                     <span class="font-bold">{{ hoverPreview.topMatch.material.name }}</span>
-                    <span v-if="hoverPreview.topMatch.paintId > 0" class="text-[#739CBF] font-medium">
+                    <span v-if="hoverPreview.topMatch.paintId > 0" class="text-[#2F658D] font-medium">
                       · {{ hoverPreview.topMatch.paintName }}
                     </span>
                   </template>
@@ -1256,7 +1292,10 @@ onUnmounted(() => {
 
               <div
                 v-if="showOverview"
-                class="w-24 sm:w-32 md:w-36 shrink-0 h-full border-l border-white/15 bg-[#1B1B1B]"
+                :class="[
+                  'w-24 sm:w-32 md:w-36 shrink-0 h-full border-l transition-colors',
+                  canvasBackdrop === 'paper' ? 'border-[#EADFD9] bg-[#FFF7F2]' : 'border-[#5A4E4B] bg-[#3B3331]'
+                ]"
               >
                 <canvas
                   ref="overviewCanvasRef"
@@ -1270,32 +1309,28 @@ onUnmounted(() => {
             </div>
 
             <!-- 底部当前选中图格状态条 -->
-            <div class="bg-white border border-[#EADFD9] rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-2 flex-wrap text-xs">
-              <template v-if="picked">
-                <div class="flex items-center gap-2.5">
-                  <div
-                    class="w-6 h-6 rounded-full border border-[#EADFD9] shrink-0"
-                    :style="{ backgroundColor: `#${picked.hex}` }"
-                  ></div>
-                  <span class="font-bold text-[#4A3F3D]">
-                    已选图格 列 {{ picked.col }} · 行 {{ picked.row }}
-                  </span>
-                  <span class="font-mono text-[#739CBF] font-semibold">#{{ picked.hex }}</span>
-                </div>
-                <Button
-                  variant="default"
-                  size="sm"
-                  class="h-7 text-xs font-semibold bg-[#739CBF] hover:bg-[#5f87a8] text-white px-3"
-                  @click="resultModalOpen = true"
-                >
-                  查看 Top 12 备选
-                </Button>
-              </template>
-              <template v-else>
-                <span class="text-[#8E807C]">
-                  提示：滚轮/双指或右下角按钮可缩放；切到「取色」点任意格子可查看备选方案。
+            <div
+              v-if="picked"
+              class="bg-white border border-[#EADFD9] rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-2 flex-wrap text-xs"
+            >
+              <div class="flex items-center gap-2.5">
+                <div
+                  class="w-6 h-6 rounded-lg border border-[#EADFD9] shrink-0"
+                  :style="{ backgroundColor: `#${picked.hex}` }"
+                ></div>
+                <span class="font-bold text-[#4A3F3D]">
+                  已选图格 列 {{ picked.col }} · 行 {{ picked.row }}
                 </span>
-              </template>
+                <span class="font-mono text-[#2F658D] font-semibold">#{{ picked.hex }}</span>
+              </div>
+              <Button
+                variant="default"
+                size="sm"
+                class="h-7 text-xs font-semibold bg-[#739CBF] hover:bg-[#5f87a8] text-white px-3"
+                @click="resultModalOpen = true"
+              >
+                查看 Top 12 备选
+              </Button>
             </div>
           </div>
 

@@ -7,10 +7,10 @@ const appVersion = __APP_VERSION__;
 </script>
 
 <template>
-  <div class="flex flex-col gap-3.5 max-w-xl mx-auto py-3 md:py-6 select-none">
+  <div class="flex flex-col gap-3.5 max-w-xl w-full mx-auto select-none">
     <Card class="bg-white border-[#EADFD9] shadow-sm">
       <CardContent class="p-5 md:p-6 flex flex-col gap-4">
-        <!-- 顶部品牌区 (紧凑居中，减少多余留白) -->
+        <!-- 顶部品牌区 -->
         <div class="flex flex-col items-center text-center gap-2">
           <div class="w-14 h-14 rounded-2xl bg-[#FFF7F2] border border-[#EADFD9] flex items-center justify-center shadow-xs">
             <img src="/logo.png" alt="TerraFlora Logo" class="w-10 h-10 object-contain drop-shadow-xs" />
@@ -24,7 +24,7 @@ const appVersion = __APP_VERSION__;
           </div>
 
           <p class="text-xs text-[#8E807C] max-w-md leading-relaxed">
-            纯本地运行的《泰拉瑞亚》玩家工具箱，集成角色存档编辑与像素画方块/墙壁选色，所有解析与计算均在浏览器本地完成。
+            纯本地运行的《泰拉瑞亚》玩家工具箱，集成角色存档编辑、地图存档工具与像素画方块/墙壁选色，所有解析与计算均在浏览器本地完成。
           </p>
         </div>
 

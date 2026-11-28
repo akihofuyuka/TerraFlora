@@ -24,22 +24,22 @@ const ammoSlots = computed(() => (store.player ? store.player.inventory.slice(54
 
 <template>
   <div class="flex flex-col gap-3">
-    <!-- 仓库子分类切换胶囊与满堆叠操作 -->
-    <div class="flex items-center justify-between gap-2 overflow-x-auto pb-1 no-scrollbar">
-      <div class="flex items-center gap-1.5 shrink-0">
+    <!-- 仓库子分类切换（轻量化文字底线）与满堆叠操作 -->
+    <div class="flex items-center justify-between gap-2 shadow-[inset_0_-1px_0_0_#EADFD9] overflow-x-auto overflow-y-hidden no-scrollbar">
+      <div class="flex items-center gap-1 shrink-0">
         <button
           v-for="st in subTabs"
           :key="st.id"
           :class="[
-            'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all duration-150 cursor-pointer border',
+            'flex items-center gap-1.5 px-3 py-2 text-xs whitespace-nowrap transition-colors duration-150 cursor-pointer border-b-2 rounded-t-lg',
             store.inventorySubTab === st.id
-              ? 'bg-[#739CBF] text-white border-[#739CBF] shadow-xs'
-              : 'bg-white text-[#4A3F3D] border-[#EADFD9] hover:bg-[#EFE7E2] shadow-2xs'
+              ? 'border-[#739CBF] text-[#2F658D] bg-white/80 font-bold'
+              : 'border-transparent text-[#8E807C] font-semibold hover:text-[#4A3F3D] hover:bg-[#EFE7E2]/40'
           ]"
           @click="store.inventorySubTab = st.id"
         >
           <span
-            class="inline-block shrink-0 drop-shadow-[0_1px_1px_rgba(0,0,0,0.15)]"
+            class="inline-block shrink-0 drop-shadow-[0_1px_1px_rgba(0,0,0,0.12)]"
             :style="{ ...getItemSpriteStyle(st.itemId, 16), imageRendering: 'pixelated' }"
           ></span>
           <span>{{ st.label }}</span>
@@ -49,7 +49,7 @@ const ammoSlots = computed(() => (store.player ? store.player.inventory.slice(54
       <Button
         variant="outline"
         size="xs"
-        class="h-7 text-xs gap-1.5 font-medium border-[#EADFD9] text-[#4A3F3D] hover:bg-[#F9D6DB]/50 shrink-0 whitespace-nowrap"
+        class="h-7 mb-1 text-xs gap-1.5 font-medium border-[#EADFD9] bg-white text-[#4A3F3D] hover:bg-[#F9D6DB]/45 shrink-0 whitespace-nowrap"
         @click="store.inventorySubTab === 'main' ? maxStackAllInventory() : maxStackCurrentBank()"
       >
         <span :style="{ ...getItemSpriteStyle(74, 14), imageRendering: 'pixelated' }"></span>
@@ -193,13 +193,3 @@ const ammoSlots = computed(() => (store.player ? store.player.inventory.slice(54
     </div>
   </div>
 </template>
-
-<style scoped>
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-</style>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue';
+import { computed, ref, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import {
   store,
   updateSelectedSlot,
@@ -11,8 +11,10 @@ import {
   replaceSelectedWithItem,
   addItemToFirstEmpty,
 } from '@/store';
+import { Star, X } from 'lucide-vue-next';
 import { getPrefixOptionLabel, PREFIX_STATS } from '@/data/prefixes';
 import { getItemSpriteStyle } from '@/utils/sprite';
+import AppModal from '@/components/ui/AppModal.vue';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -208,7 +210,26 @@ function onScroll(e: Event) {
   scrollTop.value = target.scrollTop;
 }
 
+let drawerOpenedAt = Date.now();
+
+function syncContainerHeight() {
+  if (scrollAreaRef.value && scrollAreaRef.value.clientHeight > 0) {
+    containerHeight.value = scrollAreaRef.value.clientHeight;
+  }
+}
+
+watch(
+  () => store.selectedSlot,
+  () => {
+    drawerOpenedAt = Date.now();
+    nextTick(syncContainerHeight);
+  }
+);
+
 function handlePickItem(itemId: number) {
+  if (props.isDrawer && Date.now() - drawerOpenedAt < 250) {
+    return;
+  }
   if (store.selectedSlot) {
     replaceSelectedWithItem(itemId);
   } else {
@@ -237,19 +258,32 @@ function getRarityColor(r: number) {
   return colors[Math.max(0, Math.min(colors.length - 1, r))];
 }
 
+let resizeObserver: ResizeObserver | null = null;
+
 onMounted(() => {
-  if (scrollAreaRef.value) {
-    containerHeight.value = scrollAreaRef.value.clientHeight || 380;
+  drawerOpenedAt = Date.now();
+  nextTick(syncContainerHeight);
+  if (typeof ResizeObserver !== 'undefined' && scrollAreaRef.value) {
+    resizeObserver = new ResizeObserver(() => syncContainerHeight());
+    resizeObserver.observe(scrollAreaRef.value);
   }
+});
+
+onUnmounted(() => {
+  resizeObserver?.disconnect();
+  resizeObserver = null;
 });
 </script>
 
 <template>
-  <div class="flex flex-col gap-3 h-full">
+  <div :class="['flex flex-col h-full', isDrawer ? 'gap-2' : 'gap-3']">
     <!-- 顶部选中状态与属性编辑卡片 -->
     <div
       v-if="slot && item"
-      class="rounded-xl border border-[#EADFD9] bg-white p-3.5 shadow-xs flex flex-col gap-3"
+      :class="[
+        'rounded-xl border border-[#EADFD9] bg-white shadow-xs flex flex-col',
+        isDrawer ? 'p-2.5 gap-2' : 'p-3.5 gap-3'
+      ]"
     >
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-3 min-w-0">
@@ -290,15 +324,28 @@ onMounted(() => {
           </div>
         </div>
 
-        <Button
-          variant="ghost"
-          size="xs"
-          class="h-7 w-7 p-0 text-[#8E807C] hover:text-[#4A3F3D]"
-          @click="deselectSlot(); emit('close');"
-          title="关闭"
-        >
-          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
-        </Button>
+        <div class="flex items-center gap-1 shrink-0">
+          <Button
+            v-if="item.id > 0 && (slot.slotType === 'inventory' || slot.slotType === 'bank4')"
+            variant="ghost"
+            size="xs"
+            class="h-7 w-7 p-0"
+            :class="item.favorited ? 'text-amber-500 bg-amber-50 hover:bg-amber-100' : 'text-[#8E807C] hover:text-amber-500 hover:bg-[#EFE7E2]'"
+            :title="item.favorited ? '取消收藏' : '标记收藏'"
+            @click="toggleFav"
+          >
+            <Star class="w-3.5 h-3.5" :class="item.favorited ? 'fill-current' : ''" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="xs"
+            class="h-7 w-7 p-0 text-[#8E807C] hover:text-[#4A3F3D]"
+            @click="deselectSlot(); emit('close');"
+            title="关闭"
+          >
+            <X class="w-4 h-4" />
+          </Button>
+        </div>
       </div>
 
       <!-- 快捷操作区 (一键最强词缀、一键满堆叠、清空格子) -->
@@ -333,7 +380,7 @@ onMounted(() => {
         <Button
           variant="outline"
           size="xs"
-          class="h-7 text-xs font-semibold gap-1 border-[#EADFD9] text-rose-600 hover:bg-rose-50 px-1"
+          class="h-7 text-xs font-semibold gap-1 btn-danger-soft px-1"
           @click="clearSelectedSlot"
           title="清空当前槽位"
         >
@@ -343,49 +390,50 @@ onMounted(() => {
       </div>
 
       <!-- 属性细调区 (仅在有物品时展示) -->
-      <div v-if="item.id > 0" class="flex flex-col gap-2.5 pt-2 border-t border-[#EADFD9]">
-        <!-- 堆叠步进调节 -->
-        <div class="flex items-center justify-between text-xs">
-          <span class="font-semibold text-[#4A3F3D]">堆叠数量</span>
-          <div class="flex items-center gap-1.5">
-            <Button variant="outline" size="xs" class="w-7 h-7 p-0 border-[#EADFD9] text-[#4A3F3D]" @click="changeStack(-1)">-</Button>
-            <input
-              type="number"
-              :value="item.stack"
-              class="w-16 h-7 text-center font-bold text-xs rounded border border-[#EADFD9] bg-[#FFF7F2] text-[#4A3F3D] outline-none"
-              @input="updateSelectedSlot({ stack: Math.max(1, parseInt(($event.target as HTMLInputElement).value) || 1) })"
-            />
-            <Button variant="outline" size="xs" class="w-7 h-7 p-0 border-[#EADFD9] text-[#4A3F3D]" @click="changeStack(1)">+</Button>
+      <div v-if="item.id > 0" class="flex flex-col gap-2 pt-1.5 border-t border-[#EADFD9]">
+        <!-- 堆叠数量 & 附魔词缀 并排 -->
+        <div class="grid grid-cols-2 gap-2 items-end text-xs">
+          <div class="flex flex-col gap-1">
+            <span class="text-[11px] font-semibold text-[#8E807C]">堆叠数量</span>
+            <div class="flex items-center gap-1">
+              <Button variant="outline" size="xs" class="w-7 h-7 p-0 border-[#EADFD9] text-[#4A3F3D] shrink-0" @click="changeStack(-1)">-</Button>
+              <input
+                type="number"
+                :value="item.stack"
+                class="flex-1 min-w-0 h-7 text-center font-bold text-xs rounded-lg border border-[#EADFD9] bg-[#FFF7F2] text-[#4A3F3D] outline-none"
+                @input="updateSelectedSlot({ stack: Math.max(1, parseInt(($event.target as HTMLInputElement).value) || 1) })"
+              />
+              <Button variant="outline" size="xs" class="w-7 h-7 p-0 border-[#EADFD9] text-[#4A3F3D] shrink-0" @click="changeStack(1)">+</Button>
+            </div>
           </div>
-        </div>
 
-        <!-- 词缀选择 -->
-        <div class="flex items-center justify-between text-xs">
-          <span class="font-semibold text-[#4A3F3D] shrink-0">附魔词缀</span>
-          <button
-            class="flex items-center justify-between h-7 px-2.5 rounded-lg border border-[#EADFD9] bg-white hover:bg-[#EFE7E2] transition-colors cursor-pointer text-xs font-semibold text-[#4A3F3D] max-w-[210px] shadow-2xs truncate"
-            @click="prefixModalOpen = true"
-          >
-            <span class="truncate">
-              {{ item.prefix > 0 ? (prefixMeta?.name || `词缀 #${item.prefix}`) : '无词缀' }}
-            </span>
-            <span class="text-[10px] font-mono text-[#8E807C] ml-1.5 shrink-0">
-              {{ item.prefix > 0 ? `#${item.prefix}` : '点击选择' }}
-            </span>
-          </button>
+          <div class="flex flex-col gap-1 min-w-0">
+            <span class="text-[11px] font-semibold text-[#8E807C]">附魔词缀</span>
+            <button
+              class="flex items-center justify-between h-7 px-2 rounded-lg border border-[#EADFD9] bg-white hover:bg-[#EFE7E2] transition-colors cursor-pointer text-xs font-semibold text-[#4A3F3D] w-full shadow-2xs truncate"
+              @click="prefixModalOpen = true"
+            >
+              <span class="truncate">
+                {{ item.prefix > 0 ? (prefixMeta?.name || `词缀 #${item.prefix}`) : '无词缀' }}
+              </span>
+              <span class="text-[10px] font-mono text-[#8E807C] ml-1 shrink-0">
+                {{ item.prefix > 0 ? `#${item.prefix}` : '选择' }}
+              </span>
+            </button>
+          </div>
         </div>
 
         <!-- 常用毕业词缀速点 -->
         <div class="flex flex-col gap-1 text-xs">
           <span class="text-[11px] font-semibold text-[#8E807C]">快捷词缀</span>
-          <div class="flex flex-wrap gap-1">
+          <div :class="['flex gap-1', isDrawer ? 'items-center overflow-x-auto no-scrollbar' : 'flex-wrap']">
             <button
               v-for="gp in godPrefixes"
               :key="gp.id"
               :class="[
-                'text-[10px] px-1.5 py-0.5 rounded font-medium border transition-colors cursor-pointer',
+                'text-[10px] px-1.5 py-0.5 rounded-md font-medium border transition-colors cursor-pointer whitespace-nowrap shrink-0',
                 item.prefix === gp.id
-                  ? 'bg-[#739CBF] text-white border-[#739CBF]'
+                  ? 'bg-[#EEF4F9] text-[#2F658D] border-[#C4D6E5] font-bold'
                   : 'bg-[#FFF7F2] text-[#4A3F3D] border-[#EADFD9] hover:bg-[#F9D6DB]/60'
               ]"
               @click="applyGodPrefixToSelected(gp.id)"
@@ -393,22 +441,6 @@ onMounted(() => {
               {{ gp.label }}
             </button>
           </div>
-        </div>
-
-        <!-- 收藏状态 -->
-        <div v-if="slot.slotType === 'inventory' || slot.slotType === 'bank4'" class="pt-1">
-          <Button
-            :variant="item.favorited ? 'default' : 'outline'"
-            size="xs"
-            class="w-full text-xs font-semibold gap-1.5"
-            :class="item.favorited ? 'bg-amber-500 text-white hover:bg-amber-600 border-amber-500' : 'border-[#EADFD9] text-[#4A3F3D] hover:bg-[#EFE7E2]'"
-            @click="toggleFav"
-          >
-            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
-              <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
-            </svg>
-            <span>{{ item.favorited ? '已标记收藏' : '标记收藏' }}</span>
-          </Button>
         </div>
       </div>
     </div>
@@ -422,7 +454,12 @@ onMounted(() => {
     </div>
 
     <!-- 物品搜索大厅 (随时可见，随时替换) -->
-    <div class="rounded-xl border border-[#EADFD9] bg-white p-3 shadow-xs flex flex-col flex-1 min-h-[360px]">
+    <div
+      :class="[
+        'rounded-xl border border-[#EADFD9] bg-white shadow-xs flex flex-col flex-1 min-h-0',
+        isDrawer ? 'p-2.5' : 'p-3 min-h-[360px]'
+      ]"
+    >
       <div class="flex items-center justify-between mb-2">
         <div class="flex items-center gap-1.5">
           <span
@@ -449,7 +486,7 @@ onMounted(() => {
           class="absolute right-2 top-1/2 -translate-y-1/2 text-[#8E807C] hover:text-[#4A3F3D] text-xs cursor-pointer"
           @click="searchQuery = ''"
         >
-          <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          <X class="w-3.5 h-3.5" />
         </button>
       </div>
 
@@ -459,9 +496,9 @@ onMounted(() => {
           v-for="c in categories"
           :key="c.id"
           :class="[
-            'text-[11px] px-2 py-0.5 rounded-full font-medium shrink-0 transition-all duration-150 cursor-pointer border',
+            'text-[11px] px-2.5 py-0.5 rounded-lg font-medium shrink-0 transition-all duration-150 cursor-pointer border',
             selectedCat === c.id
-              ? 'bg-[#739CBF] text-white border-[#739CBF] shadow-xs'
+              ? 'bg-[#EEF4F9] text-[#2F658D] border-[#C4D6E5] font-bold shadow-2xs'
               : 'bg-[#EFE7E2] text-[#4A3F3D] border-[#EADFD9] hover:bg-[#E8DFD9]'
           ]"
           @click="selectedCat = c.id; scrollTop = 0; if (scrollAreaRef) scrollAreaRef.scrollTop = 0;"
@@ -473,7 +510,7 @@ onMounted(() => {
       <!-- 虚拟滚动物品列表 -->
       <div
         ref="scrollAreaRef"
-        class="relative flex-1 overflow-y-auto rounded-md border border-[#EADFD9]"
+        class="relative flex-1 min-h-[140px] overflow-y-auto overscroll-contain rounded-lg border border-[#EADFD9]"
         @scroll.passive="onScroll"
       >
         <div class="absolute inset-x-0 top-0 pointer-events-none" :style="{ height: `${totalHeight}px` }"></div>
@@ -519,143 +556,107 @@ onMounted(() => {
     </div>
 
     <!-- 附魔词缀选择弹窗 -->
-    <Teleport to="body">
-      <div
-        v-if="prefixModalOpen && item"
-        class="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-3 sm:p-6"
-        @click.self="prefixModalOpen = false"
-      >
-        <div class="bg-white rounded-2xl border border-[#EADFD9] shadow-xl max-w-xl w-full max-h-[85vh] flex flex-col overflow-hidden">
-        <!-- 弹窗顶栏 -->
-        <div class="p-3.5 border-b border-[#EADFD9] flex items-center justify-between bg-[#FFF7F2]">
-          <div class="flex items-center gap-2">
-            <span class="text-xs font-bold text-[#4A3F3D]">选择附魔词缀</span>
-            <span v-if="item.prefix > 0" class="text-[10px] font-mono font-bold text-[#739CBF]">
-              当前: {{ prefixMeta?.name || `#${item.prefix}` }}
-            </span>
-          </div>
+    <AppModal
+      :open="Boolean(prefixModalOpen && item)"
+      title="选择附魔词缀"
+      :subtitle="item && item.prefix > 0 ? `当前: ${prefixMeta?.name || `#${item.prefix}`}` : undefined"
+      max-width-class="max-w-lg"
+      panel-class="max-h-[82dvh]"
+      body-class="flex-1 min-h-0 flex flex-col overflow-hidden"
+      z-index-class="z-[75]"
+      @close="prefixModalOpen = false"
+    >
+      <div class="p-2.5 border-b border-[#EADFD9] flex flex-col gap-1.5 bg-[#FFF7F2]/40 shrink-0">
+        <!-- 搜索框 -->
+        <div class="relative">
+          <Input
+            v-model="prefixSearch"
+            type="text"
+            placeholder="搜索词缀名称 / 属性加成 (如 传奇, 险恶, 暴击, 伤害)..."
+            class="h-8 text-xs pr-7 bg-white border-[#EADFD9] text-[#4A3F3D]"
+          />
           <button
-            class="text-[#8E807C] hover:text-[#4A3F3D] text-base font-bold p-1 cursor-pointer"
-            @click="prefixModalOpen = false"
+            v-if="prefixSearch"
+            class="absolute right-2 top-1/2 -translate-y-1/2 text-[#8E807C] hover:text-[#4A3F3D] cursor-pointer"
+            @click="prefixSearch = ''"
           >
-            ✕
+            <X class="w-3.5 h-3.5" />
           </button>
         </div>
 
-        <div class="p-3 border-b border-[#EADFD9] flex flex-col gap-2 bg-[#FFF7F2]/40">
-          <!-- 搜索框 -->
-          <div class="relative">
-            <Input
-              v-model="prefixSearch"
-              type="text"
-              placeholder="搜索词缀名称 / 属性加成 (如 传奇, 险恶, 暴击, 伤害)..."
-              class="h-8 text-xs bg-white border-[#EADFD9] text-[#4A3F3D]"
-            />
-            <button
-              v-if="prefixSearch"
-              class="absolute right-2 top-1/2 -translate-y-1/2 text-[#8E807C] hover:text-[#4A3F3D] text-xs cursor-pointer"
-              @click="prefixSearch = ''"
-            >
-              ✕
-            </button>
-          </div>
-
-          <!-- 分类筛选胶囊 -->
-          <div class="flex items-center gap-1 overflow-x-auto pb-0.5 no-scrollbar">
-            <button
-              v-for="cat in [
-                { id: 'all' as const, label: '全部' },
-                { id: 'god' as const, label: '毕业神级' },
-                { id: 'weapon' as const, label: '武器类' },
-                { id: 'accessory' as const, label: '饰品类' },
-                { id: 'negative' as const, label: '减益/负面' }
-              ]"
-              :key="cat.id"
-              :class="[
-                'text-[11px] px-2.5 py-0.5 rounded-full font-semibold border transition-all cursor-pointer whitespace-nowrap',
-                prefixCat === cat.id
-                  ? 'bg-[#739CBF] text-white border-[#739CBF] shadow-xs'
-                  : 'bg-white text-[#4A3F3D] border-[#EADFD9] hover:bg-[#EFE7E2]'
-              ]"
-              @click="prefixCat = cat.id"
-            >
-              {{ cat.label }}
-            </button>
-          </div>
-        </div>
-
-        <!-- 词缀列表 -->
-        <div class="p-3 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-1.5 flex-1 min-h-0">
-          <!-- 清除词缀选项 -->
+        <!-- 分类筛选 -->
+        <div class="flex items-center gap-1 overflow-x-auto pb-0.5 no-scrollbar">
           <button
-            :class="[
-              'p-2 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer col-span-full',
-              item.prefix === 0
-                ? 'bg-[#739CBF] text-white border-[#739CBF] shadow-xs'
-                : 'bg-[#FFF7F2] text-[#8E807C] border-[#EADFD9] hover:bg-[#EFE7E2]'
+            v-for="cat in [
+              { id: 'all' as const, label: '全部' },
+              { id: 'god' as const, label: '毕业神级' },
+              { id: 'weapon' as const, label: '武器类' },
+              { id: 'accessory' as const, label: '饰品类' },
+              { id: 'negative' as const, label: '减益/负面' }
             ]"
-            @click="selectPrefix(0)"
-          >
-            <span class="text-xs font-bold">无词缀 (清除附魔效果)</span>
-            <span class="text-[10px] font-mono opacity-80">ID: 0</span>
-          </button>
-
-          <button
-            v-for="p in filteredPrefixes"
-            :key="p.id"
+            :key="cat.id"
             :class="[
-              'p-2 rounded-xl border text-left flex flex-col justify-between gap-1 transition-all cursor-pointer',
-              item.prefix === p.id
-                ? 'bg-[#739CBF] text-white border-[#739CBF] shadow-xs'
-                : 'bg-white text-[#4A3F3D] border-[#EADFD9] hover:bg-[#FFF7F2]'
+              'text-[11px] px-2.5 py-0.5 rounded-lg font-semibold border transition-all cursor-pointer whitespace-nowrap',
+              prefixCat === cat.id
+                ? 'bg-[#EEF4F9] text-[#2F658D] border-[#C4D6E5] shadow-2xs'
+                : 'bg-white text-[#4A3F3D] border-[#EADFD9] hover:bg-[#EFE7E2]'
             ]"
-            @click="selectPrefix(p.id)"
+            @click="prefixCat = cat.id"
           >
-            <div class="flex items-center justify-between w-full">
-              <div class="flex items-center gap-1.5">
-                <span class="text-xs font-bold">{{ p.name }}</span>
-                <span v-if="p.isGod" class="text-[9px] px-1 py-0.2 rounded font-bold bg-amber-100 text-amber-800 border border-amber-300">
-                  毕业
-                </span>
-              </div>
-              <span class="text-[10px] font-mono opacity-70">#{{ p.id }}</span>
-            </div>
-            <span
-              class="text-[10px] leading-tight truncate max-w-full"
-              :class="item.prefix === p.id ? 'opacity-90' : 'text-[#8E807C]'"
-              :title="PREFIX_STATS[p.id] || p.en"
-            >
-              {{ PREFIX_STATS[p.id] || p.en }}
-            </span>
+            {{ cat.label }}
           </button>
-
-          <div v-if="filteredPrefixes.length === 0" class="col-span-full py-8 text-center text-xs text-[#8E807C]">
-            未检索到匹配的词缀
-          </div>
-        </div>
-
-        <div class="p-2.5 border-t border-[#EADFD9] bg-[#FFF7F2] flex justify-end">
-          <Button
-            variant="default"
-            size="xs"
-            class="h-7 text-xs font-semibold bg-[#739CBF] text-white px-3"
-            @click="prefixModalOpen = false"
-          >
-            关闭
-          </Button>
         </div>
       </div>
-    </div>
-    </Teleport>
+
+      <!-- 词缀列表 -->
+      <div v-if="item" class="p-2.5 overflow-y-auto overscroll-contain grid grid-cols-1 sm:grid-cols-2 gap-1.5 flex-1 min-h-0">
+        <!-- 清除词缀选项 -->
+        <button
+          :class="[
+            'p-2 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer col-span-full',
+            item.prefix === 0
+              ? 'bg-[#EEF4F9] text-[#2F658D] border-[#C4D6E5] shadow-2xs'
+              : 'bg-[#FFF7F2] text-[#8E807C] border-[#EADFD9] hover:bg-[#EFE7E2]'
+          ]"
+          @click="selectPrefix(0)"
+        >
+          <span class="text-xs font-bold">无词缀 (清除附魔效果)</span>
+          <span class="text-[10px] font-mono opacity-80">ID: 0</span>
+        </button>
+
+        <button
+          v-for="p in filteredPrefixes"
+          :key="p.id"
+          :class="[
+            'p-2 rounded-xl border text-left flex flex-col justify-between gap-1 transition-all cursor-pointer',
+            item.prefix === p.id
+              ? 'bg-[#EEF4F9] text-[#2F658D] border-[#C4D6E5] shadow-2xs'
+              : 'bg-white text-[#4A3F3D] border-[#EADFD9] hover:bg-[#FFF7F2]'
+          ]"
+          @click="selectPrefix(p.id)"
+        >
+          <div class="flex items-center justify-between w-full">
+            <div class="flex items-center gap-1.5">
+              <span class="text-xs font-bold">{{ p.name }}</span>
+              <span v-if="p.isGod" class="text-[9px] px-1 py-0.2 rounded font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                毕业
+              </span>
+            </div>
+            <span class="text-[10px] font-mono opacity-70">#{{ p.id }}</span>
+          </div>
+          <span
+            class="text-[10px] leading-tight truncate max-w-full"
+            :class="item.prefix === p.id ? 'text-[#2F658D]/85' : 'text-[#8E807C]'"
+            :title="PREFIX_STATS[p.id] || p.en"
+          >
+            {{ PREFIX_STATS[p.id] || p.en }}
+          </span>
+        </button>
+
+        <div v-if="filteredPrefixes.length === 0" class="col-span-full py-8 text-center text-xs text-[#8E807C]">
+          未检索到匹配的词缀
+        </div>
+      </div>
+    </AppModal>
   </div>
 </template>
-
-<style scoped>
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-</style>

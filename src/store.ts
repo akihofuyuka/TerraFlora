@@ -16,6 +16,12 @@ import {
   packTempSlots,
 } from "./core/plr";
 import { AppError, toAppError } from "./core/errors";
+import {
+  parseWldHeader,
+  buildPatchedWldBlob,
+  WLD_HEADER_SLICE_BYTES,
+  type WldHeaderInfo,
+} from "./core/wld";
 
 export { SUPPORTED_EDITIONS, SUPPORTED_VERSIONS, VERSION_GROUPS, ALL_VERSIONS, findVersionInfo };
 import { decryptPlr, encryptPlr } from "./core/crypto";
@@ -73,7 +79,7 @@ export interface DragState {
   } | null;
 }
 
-export type ActiveTool = "plr" | "pixelart" | "guide" | "about";
+export type ActiveTool = "plr" | "wld" | "pixelart" | "guide" | "about";
 export type GuideSubTab = "path" | "converter";
 
 function detectInitialTool(): ActiveTool {
@@ -86,11 +92,16 @@ function detectInitialTool(): ActiveTool {
       return "pixelart";
     }
     if (
-      toolParam === "guide" ||
+      toolParam === "wld" ||
+      toolParam === "world" ||
       toolParam === "map-converter" ||
-      hash === "#guide" ||
+      hash === "#wld" ||
+      hash === "#world" ||
       hash === "#map-converter"
     ) {
+      return "wld";
+    }
+    if (toolParam === "guide" || hash === "#guide") {
       return "guide";
     }
   } catch {
@@ -132,6 +143,9 @@ export interface StoreState {
   dragState: DragState;
   targetEdition: EditionType;
   targetVersion: number;
+  worldFile: File | null;
+  worldHeader: WldHeaderInfo | null;
+  worldTargetEdition: EditionType;
   itemPickerOpen: boolean;
   itemsList: MinItem[];
   itemsMap: Map<number, MinItem>;
@@ -177,6 +191,9 @@ export const store = reactive<StoreState>({
   },
   targetEdition: "relogic",
   targetVersion: 279,
+  worldFile: null,
+  worldHeader: null,
+  worldTargetEdition: "relogic",
   itemPickerOpen: false,
   itemsList: [],
   itemsMap: new Map(),
@@ -350,6 +367,8 @@ function syncToolHash(tool: ActiveTool, guideSubTab: GuideSubTab) {
     let targetHash = '';
     if (tool === 'pixelart') {
       targetHash = '#pixelart';
+    } else if (tool === 'wld') {
+      targetHash = '#wld';
     } else if (tool === 'guide') {
       targetHash = guideSubTab === 'converter' ? '#map-converter' : '#guide';
     }
@@ -409,7 +428,7 @@ export async function loadPlrFile(file: File) {
       const rawMagic = new TextDecoder().decode(buffer.subarray(4, 11));
       if ((rawMagic === 'relogic' || rawMagic === 'xindong') && buffer[11] === 2) {
         throw new AppError('FILE_FORMAT', '检测到这可能是地图存档 (.wld)', {
-          suggestion: '本编辑器仅支持修改角色存档 (.plr)；如需转换地图签名，请点击主界面向导中的“签名互转”工具。',
+          suggestion: '本页面用于修改角色存档 (.plr)；如需查看或转换地图，请切换到顶栏的「地图存档」工具。',
           context: { fileName: file.name, fileSize: file.size, rawMagic, fileType: buffer[11] },
         });
       }
@@ -564,6 +583,78 @@ export async function exportPlrFile() {
   } finally {
     store.isLoading = false;
   }
+}
+
+/**
+ * 读取并解析用户上传的 .wld 地图存档头（仅读取前 64KB 切片，不爆内存）
+ */
+export async function loadWldFile(file: File) {
+  try {
+    store.isLoading = true;
+    const headBytes = new Uint8Array(await file.slice(0, WLD_HEADER_SLICE_BYTES).arrayBuffer());
+    const header = parseWldHeader(headBytes, file.name, file.size);
+
+    store.worldFile = markRaw(file);
+    store.worldHeader = header;
+    store.worldTargetEdition = header.edition === 'xindong' ? 'xindong' : 'relogic';
+
+    const editionLabel = header.edition === 'xindong' ? '国服' : header.edition === 'relogic' ? '国际服' : '未知版本';
+    showToast(`成功载入地图: ${header.worldName || file.name} [${editionLabel}]`);
+  } catch (err: any) {
+    reportError(err, {
+      code: 'FILE_FORMAT',
+      title: '地图存档解析失败',
+      context: { fileName: file.name, fileSize: file.size },
+    });
+  } finally {
+    store.isLoading = false;
+  }
+}
+
+/**
+ * 切换 .wld 目标发行版签名 (relogic <-> xindong)
+ */
+export function setWorldTargetEdition(edition: EditionType) {
+  if (!store.worldHeader) return;
+  store.worldTargetEdition = edition;
+  const name = edition === 'xindong' ? '国服 (心动网络 XD)' : '国际服 (Re-Logic)';
+  showToast(`已切换目标地图签名为：${name}`);
+}
+
+/**
+ * 导出修改签名后的 .wld 地图文件
+ */
+export function exportWldFile() {
+  if (!store.worldFile || !store.worldHeader) {
+    showToast('当前未载入任何地图存档！');
+    return;
+  }
+  const blob = buildPatchedWldBlob(
+    store.worldFile,
+    store.worldHeader.magicOffset,
+    store.worldTargetEdition
+  );
+  const rawName = store.worldHeader.fileName || 'world.wld';
+  const outName = rawName.toLowerCase().endsWith('.wld') ? rawName : `${rawName}.wld`;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = outName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+  const label = store.worldTargetEdition === 'xindong' ? '国服 (xindong)' : '国际服 (relogic)';
+  showToast(`已生成导出: ${outName} [${label}]`);
+}
+
+/**
+ * 关闭当前已载入的地图存档，回到迎宾导入页
+ */
+export function closeWldFile() {
+  store.worldFile = null;
+  store.worldHeader = null;
 }
 
 /**
